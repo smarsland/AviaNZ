@@ -1,124 +1,122 @@
 class,threshold
-australasian bittern,0.0200
-australasian crested grebe,0.5000
-australasian gannet,0.5050
-australasian harrier,0.1400
-australasian shoveler,0.0050
-australian brown quail,0.0200
-australian magpie,0.1000
-banded dotterel,0.0500
+australasian bittern,0.6950
+australasian crested grebe,0.0100
+australasian gannet,0.0150
+australasian harrier,0.0250
+australasian shoveler,0.0600
+australian brown quail,0.1850
+australian magpie,0.2650
+banded dotterel,0.1600
 banded rail,0.5000
-bellbird,0.5000
-bittern,0.1500
-black billed gull,0.0450
-black fronted tern,0.1150
+black billed gull,0.7100
+black fronted tern,0.0050
 black petrel,0.5000
-black stilt,0.1900
-black swan,0.0750
-blackbird,0.1600
-blue whio,0.3850
-brown creeper,0.2000
+black stilt,0.1100
+black swan,0.4650
+blackbird,0.2350
+blue whio,0.3450
+brown creeper,0.1800
 brown teal,0.5000
-california quail,0.2050
-canada goose,0.1600
-caspian tern,0.0600
+california quail,0.3950
+canada goose,0.3150
+caspian tern,0.4050
 cattle egret,0.5000
-chaffinch,0.2100
+chaffinch,0.3200
 chatham island warbler,0.5000
 chatham robin,0.5000
-chukor,0.5000
+chukor,0.0050
 common diving petrel,0.0050
-common pheasant,0.5000
-cook's petrel,0.1000
-crimson rosella,0.1550
+common pheasant,0.0600
+cook's petrel,0.1200
+crimson rosella,0.2750
 domestic chicken,0.5000
-dunnock,0.1000
-eastern rosella,0.0400
+dunnock,0.2300
+eastern rosella,0.1000
 fairy tern,0.5000
-fantail,0.3700
+fantail,0.3250
 glossy ibis,0.5000
-goldfinch,0.0350
-great spotted kiwi,0.1300
-greenfinch,0.1150
-grey duck,0.0250
-grey or mallard duck,0.0300
-grey teal,0.1850
-grey warbler,0.2550
-gull,0.0050
-house sparrow,0.0650
-indian myna,0.0650
-kaka,0.4550
-kakapo,0.1400
-kea,0.2150
-kereru,0.2000
-little black shag,0.0250
-little blue penguin,0.0950
+goldfinch,0.9550
+great spotted kiwi,0.6100
+greenfinch,0.1850
+grey duck,0.0450
+grey or mallard duck,0.1050
+grey teal,0.2350
+grey warbler,0.2150
+gull,0.1050
+house sparrow,0.0600
+indian myna,0.2350
+kaka,0.2650
+kakapo,0.4500
+kea,0.3200
+kereru,0.1600
+little black shag,0.5000
+little blue penguin,0.2250
 little egret,0.5000
 little owl,0.5000
 little shag,0.5000
-little spotted kiwi,0.0750
-long tailed cuckoo,0.2000
-mallard duck,0.1150
-marsh crake,0.0200
-mohua,0.1300
-morepork,0.2000
-mottled petrel,0.0200
-nankeen night heron,0.0100
-new zealand falcon,0.2350
-new zealand fernbird,0.0800
-new zealand kaka,0.5000
-new zealand kingfisher,0.2950
-new zealand pipit,0.1250
+little spotted kiwi,0.2450
+long tailed cuckoo,0.4000
+mallard duck,0.0900
+marsh crake,0.0750
+mohua,0.6000
+morepork,0.4650
+mottled petrel,0.1350
+nankeen night heron,0.5000
+new zealand falcon,0.3350
+new zealand fernbird,0.5150
+new zealand kingfisher,0.4100
+new zealand pipit,0.1100
 new zealand scaup,0.5000
-north island brown kiwi,0.1900
-north island kokako,0.0600
-north island robin,0.1950
-north island saddleback,0.0750
+north island brown kiwi,0.3050
+north island kokako,0.3450
+north island robin,0.2200
+north island saddleback,0.2400
 okarito brown kiwi,0.5000
 orange fronted parakeet,0.5000
-oystercatcher,0.0700
-paradise shelduck,0.1050
-parakeet,0.2500
-peafowl,0.0200
-pied shag,0.5000
-pied stilt,0.4050
-pukeko,0.2000
-red billed gull,0.0400
-red crowned parakeet,0.6100
-redpoll,0.0950
-rifleman,0.2450
-rock wren,0.1350
-royal spoonbill,0.5000
-shining cuckoo,0.3900
-silvereye,0.4300
-skylark,0.2950
-song thrush,0.2450
-south island pied oystercatcher,0.3750
-south island robin,0.2200
-south island saddleback,0.5000
-southern black backed gull,0.1250
-southern brown kiwi,0.1700
-spotless crake,0.2250
-spotted crake,0.0050
-spotted shag,0.5000
-spur winged plover,0.0400
-starling,0.0200
-stitchbird,0.4100
+oystercatcher,0.0550
+paradise shelduck,0.2500
+parakeet,0.2100
+peafowl,0.3350
+pied shag,0.0150
+pied stilt,0.2450
+pukeko,0.5350
+red billed gull,0.0350
+red crowned parakeet,0.7900
+redpoll,0.1850
+rifleman,0.4250
+rock wren,0.1550
+royal spoonbill,0.0200
+shining cuckoo,0.3950
+silvereye,0.4400
+skylark,0.3800
+song thrush,0.2600
+south island pied oystercatcher,0.7700
+south island robin,0.3450
+south island saddleback,0.4850
+southern black backed gull,0.1350
+southern brown kiwi,0.5350
+spotless crake,0.0400
+spotted crake,0.5000
+spotted shag,0.1600
+spur winged plover,0.2150
+starling,0.0450
+stitchbird,0.3000
 takahe,0.5000
-tomtit,0.2850
-tree weta,0.4200
-tufted guineafowl,0.0450
-tui/bellbird,0.2350
+tomtit,0.3150
+tree weta,0.3450
+tufted guineafowl,0.5000
+tui/bellbird,0.3750
 turkey,0.5000
 turnstone,0.5000
-variable oystercatcher,0.6200
-weka,0.2450
-welcome swallow,0.2050
-white faced heron,0.0300
-white fronted tern,0.1250
+variable oystercatcher,0.1750
+weka,0.3650
+welcome swallow,0.2100
+white faced heron,0.0050
+white fronted tern,0.2650
 white heron,0.0050
-whitehead,0.2650
-wrybill,0.0150
-yellow crowned parakeet,0.0800
+whitehead,0.2550
+wrybill,0.0950
+yellow crowned parakeet,0.2650
 yellow eyed penguin,0.5000
-yellowhammer,0.3950
+yellowhammer,0.3850
+bittern,0.4550

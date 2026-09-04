@@ -1,0 +1,9 @@
+{
+  "name": "regnet_combined_bgsubtract_seed0",
+  "type": "regnet",
+  "seed": 0,
+  "output_folder": "/local/scratch/freangi/model_tests/regnet_combined_bgsubtract_seed0",
+  "test_name": "matched__avianz_split",
+  "status": "completed",
+  "exact_match_accuracy": 36.227544910179645
+}

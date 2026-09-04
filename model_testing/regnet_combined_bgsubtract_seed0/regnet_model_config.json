@@ -15,7 +15,7 @@
   "spec_transform": "Log",
   "model_type": "RegNet",
   "model_name": "regnety_008",
-  "num_classes": 123,
+  "num_classes": 121,
   "multilabel": true,
   "class_names": [
     "australasian bittern",
@@ -27,8 +27,6 @@
     "australian magpie",
     "banded dotterel",
     "banded rail",
-    "bellbird",
-    "bittern",
     "black billed gull",
     "black fronted tern",
     "black petrel",
@@ -85,7 +83,6 @@
     "nankeen night heron",
     "new zealand falcon",
     "new zealand fernbird",
-    "new zealand kaka",
     "new zealand kingfisher",
     "new zealand pipit",
     "new zealand scaup",
@@ -140,11 +137,13 @@
     "wrybill",
     "yellow crowned parakeet",
     "yellow eyed penguin",
-    "yellowhammer"
+    "yellowhammer",
+    "bittern"
   ],
   "use_reconstruction": false,
   "use_cnn_adapter": false,
   "use_gated_head": false,
   "bg_subtract": true,
+  "apply_reverb": false,
   "median_filter": false
 }
