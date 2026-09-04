@@ -279,6 +279,10 @@ class Trainer:
         self.use_temporal_roll = cfg.augmentation.use_temporal_roll
         self.bg_subtract = cfg.augmentation.bg_subtract
         self.apply_reverb = cfg.augmentation.apply_reverb
+        self.reverb_prob = getattr(cfg.augmentation, 'reverb_prob', 1.0)
+        self.reverb_decay_range = getattr(cfg.augmentation, 'reverb_decay_range', (0.3, 1.2))
+        self.reverb_delay_range = getattr(cfg.augmentation, 'reverb_delay_range', (2, 40))
+        self.reverb_threshold = getattr(cfg.augmentation, 'reverb_threshold', 2.5)
         self.median_filter = cfg.augmentation.median_filter
         self.no_background = getattr(cfg.augmentation, 'no_background', False)
         self.use_deltas = getattr(cfg.augmentation, 'use_deltas', False)
@@ -461,6 +465,8 @@ class Trainer:
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
             use_class_balancing=False, bg_subtract=self.bg_subtract, apply_reverb=self.apply_reverb,
+            reverb_prob=self.reverb_prob, reverb_decay_range=self.reverb_decay_range,
+            reverb_delay_range=self.reverb_delay_range, reverb_threshold=self.reverb_threshold,
             median_filter=self.median_filter,
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,

@@ -236,8 +236,9 @@ class SpectrogramDataset(Dataset):
     def __init__(self, filenames, labels, img_height, img_width, channels=1,
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3,
                  spec_transform="Log", training=True, width_downsizing=None, bg_subtract=False,
-                 median_filter=False, apply_reverb=False, use_temporal_roll=True, noise_mode='full', background_prob=0.0,
-                 ast_channel_dir=None, use_deltas=False):
+                 median_filter=False, apply_reverb=False, reverb_prob=1.0, reverb_decay_range=(0.3, 1.2),
+                 reverb_delay_range=(2, 40), reverb_threshold=2.5, use_temporal_roll=True, noise_mode='full',
+                 background_prob=0.0, ast_channel_dir=None, use_deltas=False):
         """
         Initialize SpectrogramDataset.
         
@@ -255,6 +256,10 @@ class SpectrogramDataset(Dataset):
             width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])
             bg_subtract: Whether to apply background subtraction (independent)
             apply_reverb: Whether to apply reverberation to loud noises (independent)
+            reverb_prob: Probability of applying reverb to a given training sample when apply_reverb=True
+            reverb_decay_range: (min, max) reverb decay/gain, sampled uniformly per sample
+            reverb_delay_range: (min, max) mean echo delay in spectrogram frames, sampled uniformly per sample
+            reverb_threshold: Z-score above which a time-frequency cell counts as "loud" and reverberates
             median_filter: Whether to apply temporal median filtering (independent)
             use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
             noise_mode: How to extract noise - 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
@@ -278,6 +283,10 @@ class SpectrogramDataset(Dataset):
         self.bg_subtract = bg_subtract
         self.median_filter = median_filter
         self.apply_reverb = apply_reverb
+        self.reverb_prob = reverb_prob
+        self.reverb_decay_range = reverb_decay_range
+        self.reverb_delay_range = reverb_delay_range
+        self.reverb_threshold = reverb_threshold
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
         self.noise_mode = noise_mode
         self.background_prob = background_prob if training else 0.0
@@ -320,7 +329,9 @@ class SpectrogramDataset(Dataset):
         if self.median_filter:
             print(f"Median filtering: enabled")
         if self.apply_reverb:
-            print(f"Reverberation augmentation: enabled")
+            print(f"Reverberation augmentation: enabled (prob={self.reverb_prob}, "
+                  f"decay={self.reverb_decay_range}, delay={self.reverb_delay_range} frames, "
+                  f"threshold={self.reverb_threshold}sigma)")
         if self.background_prob > 0:
             print(f"⚡ Background replacement: {self.background_prob*100:.1f}% of samples replaced with background (labels zeroed)")
         print(f"Time-axis padding: ZERO PADDING")
@@ -367,12 +378,13 @@ class SpectrogramDataset(Dataset):
             data = self._mix_noise_2d(data)
 
         # Apply reverberation to the spectrogram
-        if self.training and self.apply_reverb:
-            delay_mean = self.rng.randint(1, 20)
+        if self.training and self.apply_reverb and self.rng.rand() < self.reverb_prob:
+            delay_min, delay_max = self.reverb_delay_range
+            delay_mean = self.rng.randint(delay_min, delay_max + 1)
             delay_std = delay_mean * self.rng.uniform(0.5, 1.5)
-            length = 50
-            decay = self.rng.uniform(0.0, 1.0)
-            data = apply_reverb(data, delay_mean, delay_std, length, decay)
+            length = max(60, int(delay_max * 2))
+            decay = self.rng.uniform(*self.reverb_decay_range)
+            data = apply_reverb(data, delay_mean, delay_std, length, decay, threshold=self.reverb_threshold)
 
         # Apply spectrogram transformation on the 2D raw data, before padding.
         # For LogMinMax, background subtraction must happen between the log step and
@@ -876,6 +888,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        cropping_mode="center", noise_ratio=0.3, spec_transform=None,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, bg_subtract=False, apply_reverb=False, median_filter=False,
+                       reverb_prob=1.0, reverb_decay_range=(0.3, 1.2), reverb_delay_range=(2, 40),
+                       reverb_threshold=2.5,
                        use_temporal_roll=True,
                        mixup_mode='mixup', noise_mode='full', background_prob=0.0,
                        ast_channel_dir=None, use_deltas=False):
@@ -923,6 +937,10 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         width_downsizing=width_downsizing,
         bg_subtract=bg_subtract,
         apply_reverb=apply_reverb,
+        reverb_prob=reverb_prob,
+        reverb_decay_range=reverb_decay_range,
+        reverb_delay_range=reverb_delay_range,
+        reverb_threshold=reverb_threshold,
         median_filter=median_filter,
         use_temporal_roll=use_temporal_roll,
         noise_mode=noise_mode,

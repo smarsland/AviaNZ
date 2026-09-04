@@ -589,8 +589,8 @@ def main():
                         help='Output base directory')
     parser.add_argument('--mapping', default='data/DOC_bird_naming_map.csv',
                         help='Path to DOC_bird_naming_map.csv')
-    parser.add_argument('--max-per-species', type=int, default=1000,
-                        help='Maximum samples per species per dataset (default: 1000)')
+    parser.add_argument('--max-per-species', type=int, default=2000,
+                        help='Maximum samples per species per dataset (default: 2000)')
     parser.add_argument('--min-per-class', type=int, default=50,
                         help='Minimum samples per class in BOTH datasets to keep the class '
                              '(default: 50)')

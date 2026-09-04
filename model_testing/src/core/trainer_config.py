@@ -56,6 +56,10 @@ class AugmentationConfig:
     use_temporal_roll: bool = config.DEFAULT_TEMPORAL_ROLL
     bg_subtract: bool = False  # Background subtraction normalization (independent)
     apply_reverb: bool = False  # Apply reverberation to loud noises (independent)
+    reverb_prob: float = 1.0  # Probability of applying reverb per training sample
+    reverb_decay_range: tuple = (0.3, 1.2)  # (min, max) reverb decay/gain, sampled per sample
+    reverb_delay_range: tuple = (2, 40)  # (min, max) mean echo delay in spectrogram frames
+    reverb_threshold: float = 2.5  # Z-score above which a cell counts as "loud" and reverberates
     median_filter: bool = False  # Temporal median filtering (independent)
     no_background: bool = False  # Drop all-zero (background) training samples
     use_deltas: bool = False  # Add delta + delta-delta channels (3-ch input; encodes rate-of-change)
@@ -154,6 +158,10 @@ class TrainerConfig:
                 use_temporal_roll=getattr(args, 'temporal_roll', config.DEFAULT_TEMPORAL_ROLL),
                 bg_subtract=getattr(args, 'bg_subtract', False),
                 apply_reverb=getattr(args, 'apply_reverb', False),
+                reverb_prob=getattr(args, 'reverb_prob', 1.0),
+                reverb_decay_range=tuple(getattr(args, 'reverb_decay_range', (0.3, 1.2))),
+                reverb_delay_range=tuple(getattr(args, 'reverb_delay_range', (2, 40))),
+                reverb_threshold=getattr(args, 'reverb_threshold', 2.5),
                 median_filter=getattr(args, 'median_filter', False),
                 no_background=getattr(args, 'no_background', False),
                 use_deltas=getattr(args, 'use_deltas', False),

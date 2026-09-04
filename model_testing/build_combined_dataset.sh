@@ -62,6 +62,14 @@ while [[ $# -gt 0 ]]; do
             DRIVE3="$2"
             shift 2
             ;;
+        --freefield-dir)
+            FREEFIELD_DIR="$2"
+            shift 2
+            ;;
+        --skip-noise)
+            SKIP_NOISE=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             exit 1
@@ -81,8 +89,11 @@ fi
 
 
 OUTPUT="${BASE}/combined_dataset"
-MAX_PER_SPECIES="${MAX_PER_SPECIES:-5000}"
+MAX_PER_SPECIES="${MAX_PER_SPECIES:-2000}"
 MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"
+
+FREEFIELD_DIR="${FREEFIELD_DIR:-${SERVER_PREFIX}_02/freefield}"
+SKIP_NOISE="${SKIP_NOISE:-false}"
 
 
 AVIANZ_FOLDERS=(
@@ -130,3 +141,37 @@ echo ""
 echo "Done."
 echo "Merged training dataset:"
 echo "  ${OUTPUT}/merged_train"
+
+# ---------------------------------------------------------------- noise
+# Build the noise dataset used by train.py's --noise-folder / --noise mixing
+# augmentation: environmental (wind/rain/etc, from a freefield zip archive)
+# plus AviaNZ background sampled from unannotated gaps between segments.
+NOISE_OUTPUT="${BASE}/noise_dataset"
+if [[ "$SKIP_NOISE" == true ]]; then
+    echo ""
+    echo "--- Skipping noise dataset build (--skip-noise) ---"
+elif [[ "$OVERWRITE_FLAG" == "" && -f "${NOISE_OUTPUT}/noise_combined/labels.json" ]]; then
+    echo ""
+    echo "--- Noise dataset already exists at ${NOISE_OUTPUT}/noise_combined, skipping ---"
+else
+    echo ""
+    echo "=== Building noise dataset (environmental + AviaNZ background) ==="
+    NOISE_ARGS=()
+    if [[ -d "$FREEFIELD_DIR" ]]; then
+        NOISE_ARGS+=( "--freefield-dir" "$FREEFIELD_DIR" )
+    else
+        echo "  Freefield dir not found: $FREEFIELD_DIR (skipping environmental noise)"
+    fi
+    for FOLDER in "${AVIANZ_FOLDERS[@]}"; do
+        NOISE_ARGS+=( "--avianz-raw" "${FOLDER}" )
+    done
+    PYTHONPATH="$REPO_ROOT" python3 \
+    "$REPO_ROOT/model_testing/scripts/build_noise_dataset.py" \
+        "${NOISE_ARGS[@]}" \
+        --output "${NOISE_OUTPUT}" \
+        --spec-type Standard \
+        --window-type Hamming \
+        --sg-scale "Mel Frequency" \
+        ${OVERWRITE_FLAG}
+    echo "Noise dataset: ${NOISE_OUTPUT}/noise_combined"
+fi
