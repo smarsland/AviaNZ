@@ -69,16 +69,20 @@ Examples:
                        help=f"Noise mixing ratio (default: {config.DEFAULT_NOISE_RATIO}, 0 = disabled)")
     parser.add_argument('--noise-folder', type=str, default=None,
                        help="Path to noise data folder (default: same as data_folder)")
+    parser.add_argument('--noise-max-gain', type=float, default=4.0,
+                       help="Cap on the gain applied to a noise clip when energy-matching it to the "
+                            "bird sample being augmented (default: 4.0). Prevents near-silent noise "
+                            "clips from being amplified without bound and overwhelming the real signal.")
     
     # Preprocessing
     parser.add_argument('--bg-subtract', action='store_true',
                        help="Apply background subtraction normalization (works independently)")
     parser.add_argument('--apply-reverb', action='store_true',
                        help="Apply reverberation to loud noises")
-    parser.add_argument('--reverb-prob', type=float, default=1.0,
-                       help="Probability of applying reverb to a given training sample (default: 1.0)")
-    parser.add_argument('--reverb-decay-range', type=float, nargs=2, default=(0.3, 1.2), metavar=('MIN', 'MAX'),
-                       help="Range to sample reverb decay/gain from per sample (default: 0.3 1.2)")
+    parser.add_argument('--reverb-prob', type=float, default=0.5,
+                       help="Probability of applying reverb to a given training sample (default: 0.5)")
+    parser.add_argument('--reverb-decay-range', type=float, nargs=2, default=(0.15, 0.6), metavar=('MIN', 'MAX'),
+                       help="Range to sample reverb decay/gain from per sample (default: 0.15 0.6)")
     parser.add_argument('--reverb-delay-range', type=int, nargs=2, default=(2, 40), metavar=('MIN', 'MAX'),
                        help="Range (in spectrogram frames) to sample the mean echo delay from (default: 2 40)")
     parser.add_argument('--reverb-threshold', type=float, default=2.5,

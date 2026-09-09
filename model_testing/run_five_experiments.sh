@@ -65,7 +65,7 @@ OUT_REGNET_COMBINED="${OUT_ROOT}/regnet_combined_bgsubtract_seed0"
 OUT_REGNET_REVERB="${OUT_ROOT}/regnet_bgsub_reverb"
 OUT_REGNET_NOISE="${OUT_ROOT}/regnet_combined_bgsub_noisemix"
 NOISE_FOLDER="${NOISE_FOLDER:-${BASE}/noise_dataset/noise_combined}"
-NOISE_RATIO="${NOISE_RATIO:-0.2}"
+NOISE_RATIO="${NOISE_RATIO:-0.1}"
 
 PRETRAINED_MODEL="${BIRDCLEF_PRETRAINED_PATH:-BirdClefModels/model_fold0.pth}"
 

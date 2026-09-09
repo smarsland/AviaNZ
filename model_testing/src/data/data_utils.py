@@ -234,9 +234,9 @@ class SpectrogramDataset(Dataset):
     """
     
     def __init__(self, filenames, labels, img_height, img_width, channels=1,
-                 cropping_mode="center", noise_filenames=None, noise_ratio=0.3,
+                 cropping_mode="center", noise_filenames=None, noise_ratio=0.3, noise_max_gain=4.0,
                  spec_transform="Log", training=True, width_downsizing=None, bg_subtract=False,
-                 median_filter=False, apply_reverb=False, reverb_prob=1.0, reverb_decay_range=(0.3, 1.2),
+                 median_filter=False, apply_reverb=False, reverb_prob=0.5, reverb_decay_range=(0.15, 0.6),
                  reverb_delay_range=(2, 40), reverb_threshold=2.5, use_temporal_roll=True, noise_mode='full',
                  background_prob=0.0, ast_channel_dir=None, use_deltas=False):
         """
@@ -251,6 +251,8 @@ class SpectrogramDataset(Dataset):
             cropping_mode: How to crop images ('center' or 'random')
             noise_filenames: List of noise file paths for augmentation
             noise_ratio: Expected noise mixing ratio (samples uniformly from [0, min(2×noise_ratio, 1.0)], clipped to valid range)
+            noise_max_gain: Cap on the gain applied to a noise clip when energy-matching it to the
+                bird sample (prevents near-silent noise clips from being amplified without bound)
             spec_transform: Transform to apply ("Log", "PCEN", "Box-Cox", "Sigmoid", None)
             training: Whether this is training data (affects augmentation)
             width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])
@@ -277,6 +279,7 @@ class SpectrogramDataset(Dataset):
         self.cropping_mode = cropping_mode
         self.noise_filenames = noise_filenames if noise_filenames else []
         self.noise_ratio = noise_ratio if training else 0.0  # Expected noise ratio (samples from [0, 2×ratio])
+        self.noise_max_gain = noise_max_gain
         self.spec_transform = spec_transform
         self.training = training
         self.width_downsizing = width_downsizing
@@ -647,7 +650,14 @@ class SpectrogramDataset(Dataset):
         bird_energy = np.sqrt(np.mean(bird_linear ** 2))
         noise_energy = np.sqrt(np.mean(noise_linear ** 2))
         if noise_energy > 1e-8:
-            noise_linear = noise_linear * (bird_energy / noise_energy)
+            # Cap the gain: matching a near-silent noise clip's energy to a bird
+            # sample's energy with NO limit can blow up the noise clip by orders
+            # of magnitude (e.g. a "quiet" background clip mixed into a sample
+            # with a loud call), which can overwhelm the real signal rather than
+            # act as gentle background noise. Empirically this made noise-mixing
+            # net-negative, so the gain is capped.
+            energy_scale = np.clip(bird_energy / noise_energy, 0.0, self.noise_max_gain)
+            noise_linear = noise_linear * energy_scale
 
         return (1.0 - actual_ratio) * bird_linear + actual_ratio * noise_linear
 
@@ -885,10 +895,10 @@ def sparse_collate_fn(batch):
 
 
 def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
-                       cropping_mode="center", noise_ratio=0.3, spec_transform=None,
+                       cropping_mode="center", noise_ratio=0.3, noise_max_gain=4.0, spec_transform=None,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, bg_subtract=False, apply_reverb=False, median_filter=False,
-                       reverb_prob=1.0, reverb_decay_range=(0.3, 1.2), reverb_delay_range=(2, 40),
+                       reverb_prob=0.5, reverb_decay_range=(0.15, 0.6), reverb_delay_range=(2, 40),
                        reverb_threshold=2.5,
                        use_temporal_roll=True,
                        mixup_mode='mixup', noise_mode='full', background_prob=0.0,
@@ -932,6 +942,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         img_height, img_width, channels, cropping_mode,
         noise_filenames=data['train_noise_filenames'],
         noise_ratio=noise_ratio,
+        noise_max_gain=noise_max_gain,
         spec_transform=spec_transform,
         training=True,
         width_downsizing=width_downsizing,

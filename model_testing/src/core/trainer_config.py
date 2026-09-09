@@ -50,14 +50,15 @@ class AugmentationConfig:
     """Data augmentation settings."""
     mixup_alpha: float = config.DEFAULT_MIXUP_ALPHA
     noise_ratio: float = config.DEFAULT_NOISE_RATIO
+    noise_max_gain: float = 4.0  # Cap on noise-clip gain when energy-matching to the bird sample
     noise_folder: Optional[str] = None
     noise_as_samples: bool = False
     max_noise_samples: Optional[int] = None
     use_temporal_roll: bool = config.DEFAULT_TEMPORAL_ROLL
     bg_subtract: bool = False  # Background subtraction normalization (independent)
     apply_reverb: bool = False  # Apply reverberation to loud noises (independent)
-    reverb_prob: float = 1.0  # Probability of applying reverb per training sample
-    reverb_decay_range: tuple = (0.3, 1.2)  # (min, max) reverb decay/gain, sampled per sample
+    reverb_prob: float = 0.5  # Probability of applying reverb per training sample
+    reverb_decay_range: tuple = (0.15, 0.6)  # (min, max) reverb decay/gain, sampled per sample
     reverb_delay_range: tuple = (2, 40)  # (min, max) mean echo delay in spectrogram frames
     reverb_threshold: float = 2.5  # Z-score above which a cell counts as "loud" and reverberates
     median_filter: bool = False  # Temporal median filtering (independent)
@@ -152,14 +153,15 @@ class TrainerConfig:
             augmentation=AugmentationConfig(
                 mixup_alpha=args.mixup,
                 noise_ratio=getattr(args, 'noise', config.DEFAULT_NOISE_RATIO),
+                noise_max_gain=getattr(args, 'noise_max_gain', 4.0),
                 noise_folder=getattr(args, 'noise_folder', None),
                 noise_as_samples=getattr(args, 'noise_as_samples', False),
                 max_noise_samples=getattr(args, 'max_noise_samples', None),
                 use_temporal_roll=getattr(args, 'temporal_roll', config.DEFAULT_TEMPORAL_ROLL),
                 bg_subtract=getattr(args, 'bg_subtract', False),
                 apply_reverb=getattr(args, 'apply_reverb', False),
-                reverb_prob=getattr(args, 'reverb_prob', 1.0),
-                reverb_decay_range=tuple(getattr(args, 'reverb_decay_range', (0.3, 1.2))),
+                reverb_prob=getattr(args, 'reverb_prob', 0.5),
+                reverb_decay_range=tuple(getattr(args, 'reverb_decay_range', (0.15, 0.6))),
                 reverb_delay_range=tuple(getattr(args, 'reverb_delay_range', (2, 40))),
                 reverb_threshold=getattr(args, 'reverb_threshold', 2.5),
                 median_filter=getattr(args, 'median_filter', False),

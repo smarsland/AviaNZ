@@ -35,6 +35,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import numpy as np
 import soundfile as sf
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -72,6 +73,23 @@ def find_annotation_gaps(segments, duration, min_gap_seconds):
         gaps.append((cursor, duration))
 
     return [(s, e) for s, e in gaps if e - s >= min_gap_seconds]
+
+
+def _looks_like_bird_call(sg, z_thresh=4.0, max_frac=0.001):
+    """Reject a "background" clip if it still contains a loud, call-like transient.
+
+    Annotation gaps aren't guaranteed to be truly silent (reviewers can miss faint
+    calls), and mixing a clip that secretly contains a real call into an unrelated
+    training sample corrupts supervision rather than adding gentle noise. Uses the
+    same background z-score test as reverberator.py/normalizer.py.
+    """
+    sg = np.asarray(sg, dtype=np.float32)
+    n_bg = max(1, sg.shape[1] // 10)
+    bg = np.sort(sg, axis=1)[:, :n_bg]
+    mu0 = bg.mean(axis=1, keepdims=True)
+    std0 = bg.std(axis=1, keepdims=True)
+    z = (sg - mu0) / (std0 + 1e-6)
+    return (z > z_thresh).mean() > max_frac
 
 
 def build_avianz_background_noise(avianz_raw_folders, output_folder, num_samples, clip_seconds,
@@ -120,6 +138,7 @@ def build_avianz_background_noise(avianz_raw_folders, output_folder, num_samples
 
     file_labels = []
     failed = 0
+    rejected = 0
     for wav_file, gap_start, gap_end in candidates:
         if len(file_labels) >= num_samples:
             break
@@ -133,6 +152,9 @@ def build_avianz_background_noise(avianz_raw_folders, output_folder, num_samples
         sg = spec_proc.process_audio_segment(wav_file, start, end)
         if sg is None:
             failed += 1
+            continue
+        if _looks_like_bird_call(sg):
+            rejected += 1
             continue
 
         basename = f'avianz_bg_{len(file_labels):06d}'
@@ -161,7 +183,7 @@ def build_avianz_background_noise(avianz_raw_folders, output_folder, num_samples
         json.dump(labels_data, f, indent=2)
 
     print(f"  Saved {len(file_labels)} AviaNZ background-gap noise clips "
-          f"(candidates={len(candidates)}, failed={failed})")
+          f"(candidates={len(candidates)}, rejected_as_call-like={rejected}, failed={failed})")
     return len(file_labels)
 
 
@@ -217,8 +239,8 @@ def main():
                         help="Max environmental (freefield) noise clips (default: 2000)")
     parser.add_argument('--num-avianz-background', type=int, default=2000,
                         help="Max AviaNZ unannotated-gap noise clips (default: 2000)")
-    parser.add_argument('--min-gap-seconds', type=float, default=3.0,
-                        help="Minimum unannotated gap length to sample from (default: 3.0)")
+    parser.add_argument('--min-gap-seconds', type=float, default=5.0,
+                        help="Minimum unannotated gap length to sample from (default: 5.0)")
     parser.add_argument('--clip-seconds', type=float, default=5.0,
                         help="Duration of each extracted AviaNZ background clip (default: 5.0)")
     parser.add_argument('--spec-type', default='Standard')

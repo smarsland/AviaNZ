@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -99,33 +100,75 @@ def get_canonical_gt(model_data, test_splits):
 
 
 # ---------------------------------------------------------------------------
-# Model catalogue
+# Model catalogue - auto-discovered from model_tests/, so trying a new model
+# only requires dropping its output dir in there (no editing this script).
 # ---------------------------------------------------------------------------
 
-MODELS = [
-    # (experiment_dir_name,              display_label,               csv_layout)
-    ("birdnet_pretrained_seed0",         "BirdNET\n(pretrained)",    "subdir"),
-    ("kaytoo_pretrained_seed0",          "Kaytoo\n(pretrained)",     "subdir"),
-    ("regnet_on_doc_bgsub",              "RegNet+BgSub\n(DOC)",      "flat"),
-    ("regnet_combined_bgsubtract_seed0", "RegNet+BgSub\n(combined)", "flat"),
-    ("regnet_bgsub_reverb",       "RegNet+BgSub+Reverb\n(combined)","flat"),
-]
+# Populated by discover_models()/assign_colors() at the start of main().
+MODELS = []
+BAR_COLOR = {}
+BAR_EDGE = {}
 
-# Distinct colors for each model - all clearly different
-BAR_COLOR = {
-    "birdnet_pretrained_seed0":         "#E74C3C",  # Red
-    "kaytoo_pretrained_seed0":          "#F39C12",  # Orange
-    "regnet_on_doc_bgsub":              "#2E86C1",  # Medium blue
-    "regnet_combined_bgsubtract_seed0": "#1A5276",  # Dark blue
-    "regnet_bgsub_reverb":              "#85C1E9",  # Light blue
+_ABBREV = {
+    "regnet": "RegNet", "ast": "AST", "bgsub": "BgSub", "bgsubtract": "BgSub",
+    "bg": "Bg", "subtract": "Subtract", "doc": "DOC", "avianz": "AviaNZ",
+    "noisemix": "NoiseMix", "reverb": "Reverb", "pretrained": "(pretrained)",
 }
-BAR_EDGE = {
-    "birdnet_pretrained_seed0":         "#C0392B",
-    "kaytoo_pretrained_seed0":          "#E67E22",
-    "regnet_on_doc_bgsub":              "#1A5276",
-    "regnet_combined_bgsubtract_seed0": "#0E2F44",
-    "regnet_bgsub_reverb":              "#5B8CB8",
-}
+
+
+def _auto_label(exp_name):
+    """Derive a short multi-line bar label from an experiment dir name."""
+    words = re.sub(r"_?seed\d+", "", exp_name).split("_")
+    text = " ".join(_ABBREV.get(w, w) for w in words if w)
+    # Wrap onto two lines (near the middle, at a space) so bars stay narrow.
+    if len(text) > 18 and " " in text:
+        mid = len(text) // 2
+        split_at = text.rfind(" ", 0, mid)
+        if split_at == -1:
+            split_at = text.find(" ", mid)
+        if split_at != -1:
+            text = text[:split_at] + "\n" + text[split_at + 1:]
+    return text
+
+
+def discover_models(model_tests):
+    """Scan model_tests/ for experiment dirs with prediction CSVs.
+
+    Layout ('subdir' for evaluate_birdnet.py/evaluate_kaytoo.py output,
+    'flat' for train.py --eval-only output) is auto-detected per dir.
+    """
+    models = []
+    if not model_tests.is_dir():
+        return models
+    for d in sorted(model_tests.iterdir()):
+        if not d.is_dir():
+            continue
+        layout = next(
+            (
+                candidate for candidate in ("subdir", "flat")
+                if any(
+                    find_csv(d, candidate, split)
+                    for split in ("combined_doc", "combined_avianz", "matched_doc", "matched_avianz")
+                )
+            ),
+            None,
+        )
+        if layout is None:
+            print(f"  (skipping {d.name}: no prediction CSVs found)")
+            continue
+        models.append((d.name, _auto_label(d.name), layout))
+    return models
+
+
+def assign_colors(exp_names):
+    """Give every discovered model a distinct color from a fixed palette."""
+    cmap = plt.get_cmap("tab10" if len(exp_names) <= 10 else "tab20")
+    bar_color, bar_edge = {}, {}
+    for i, name in enumerate(exp_names):
+        r, g, b, a = cmap(i % cmap.N)
+        bar_color[name] = (r, g, b, a)
+        bar_edge[name] = (r * 0.6, g * 0.6, b * 0.6, a)
+    return bar_color, bar_edge
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +200,7 @@ def find_csv(model_dir, layout, split):
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
+
 
 def load_csv(path):
     """Load a predictions CSV.  Returns None if missing or all-NaN rows."""
@@ -546,7 +590,7 @@ def draw_figure(results, metric, conditions, out_path):
                        frameon=True, 
                        fancybox=True, 
                        shadow=True,
-                       ncol=5,  # Single row with 5 columns
+                       ncol=min(len(exp_names), 6),
                        handlelength=2.5,
                        handletextpad=0.8,
                        borderaxespad=0.5)  # Reduced padding
@@ -590,6 +634,14 @@ def main():
     print(f"model_tests : {model_tests}")
     print()
 
+    global MODELS, BAR_COLOR, BAR_EDGE
+    MODELS = discover_models(model_tests)
+    if not MODELS:
+        print("ERROR: no experiment dirs with prediction CSVs found under model_tests/.", file=sys.stderr)
+        sys.exit(1)
+    BAR_COLOR, BAR_EDGE = assign_colors([n for n, _, _ in MODELS])
+    print(f"Discovered {len(MODELS)} models: {[n for n, _, _ in MODELS]}\n")
+
     # Load DOC naming map so Kaytoo eBird codes are normalised to common names
     here = Path(__file__).resolve().parent
     ebird_to_common = _load_ebird_to_common(here.parent / "data")
@@ -612,7 +664,7 @@ def main():
         for split in ALL_SPLITS:
             csv = find_csv(model_dir, layout, split)
             df  = load_csv(csv)
-            if df is not None and exp_name == "kaytoo_pretrained_seed0":
+            if df is not None and "kaytoo" in exp_name:
                 df = _normalize_kaytoo_df(df, ebird_to_common)
             splits[split] = df
             status = f"{len(df)} rows" if df is not None else "missing/empty"

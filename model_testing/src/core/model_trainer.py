@@ -273,14 +273,15 @@ class Trainer:
         # Augmentation configuration
         self.mixup_alpha = cfg.augmentation.mixup_alpha
         self.noise_ratio = cfg.augmentation.noise_ratio
+        self.noise_max_gain = getattr(cfg.augmentation, 'noise_max_gain', 4.0)
         self.noise_folder = cfg.augmentation.noise_folder
         self.noise_as_samples = cfg.augmentation.noise_as_samples
         self.max_noise_samples = cfg.augmentation.max_noise_samples
         self.use_temporal_roll = cfg.augmentation.use_temporal_roll
         self.bg_subtract = cfg.augmentation.bg_subtract
         self.apply_reverb = cfg.augmentation.apply_reverb
-        self.reverb_prob = getattr(cfg.augmentation, 'reverb_prob', 1.0)
-        self.reverb_decay_range = getattr(cfg.augmentation, 'reverb_decay_range', (0.3, 1.2))
+        self.reverb_prob = getattr(cfg.augmentation, 'reverb_prob', 0.5)
+        self.reverb_decay_range = getattr(cfg.augmentation, 'reverb_decay_range', (0.15, 0.6))
         self.reverb_delay_range = getattr(cfg.augmentation, 'reverb_delay_range', (2, 40))
         self.reverb_threshold = getattr(cfg.augmentation, 'reverb_threshold', 2.5)
         self.median_filter = cfg.augmentation.median_filter
@@ -461,7 +462,7 @@ class Trainer:
         num_workers = 4 if torch.cuda.is_available() else 2
         self.train_loader, self.val_loader = create_data_loaders(
             self.data, self.batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
-            cropping_mode='random', noise_ratio=self.noise_ratio,
+            cropping_mode='random', noise_ratio=self.noise_ratio, noise_max_gain=self.noise_max_gain,
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
             use_class_balancing=False, bg_subtract=self.bg_subtract, apply_reverb=self.apply_reverb,
