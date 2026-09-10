@@ -66,6 +66,10 @@ while [[ $# -gt 0 ]]; do
             FREEFIELD_DIR="$2"
             shift 2
             ;;
+        --noise-count)
+            NUM_NOISE_PER_SOURCE="$2"
+            shift 2
+            ;;
         --skip-noise)
             SKIP_NOISE=true
             shift
@@ -94,6 +98,7 @@ MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"
 
 FREEFIELD_DIR="${FREEFIELD_DIR:-${SERVER_PREFIX}_02/freefield}"
 SKIP_NOISE="${SKIP_NOISE:-false}"
+NUM_NOISE_PER_SOURCE="${NUM_NOISE_PER_SOURCE:-5000}"
 
 
 AVIANZ_FOLDERS=(
@@ -169,6 +174,8 @@ else
     "$REPO_ROOT/model_testing/scripts/build_noise_dataset.py" \
         "${NOISE_ARGS[@]}" \
         --output "${NOISE_OUTPUT}" \
+        --num-environmental "${NUM_NOISE_PER_SOURCE}" \
+        --num-avianz-background "${NUM_NOISE_PER_SOURCE}" \
         --spec-type Standard \
         --window-type Hamming \
         --sg-scale "Mel Frequency" \
