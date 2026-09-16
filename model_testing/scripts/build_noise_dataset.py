@@ -225,9 +225,9 @@ def main():
                         help="Minimum unannotated gap length to sample from (default: 5.0)")
     parser.add_argument('--clip-seconds', type=float, default=5.0,
                         help="Duration of each extracted AviaNZ background clip (default: 5.0)")
-    parser.add_argument('--spec-type', default='Standard')
-    parser.add_argument('--window-type', default='Hamming')
-    parser.add_argument('--sg-scale', default='Mel Frequency')
+    parser.add_argument('--spec-type', default=config.SPECTROGRAM_PARAMS['sgType'])
+    parser.add_argument('--window-type', default=config.SPECTROGRAM_PARAMS['windowType'])
+    parser.add_argument('--sg-scale', default=config.SPECTROGRAM_PARAMS['sgScale'])
     parser.add_argument('--with-audio', action='store_true')
     parser.add_argument('--symlink', action='store_true', default=True,
                         help="Symlink files into the merged folder instead of copying (default: True)")

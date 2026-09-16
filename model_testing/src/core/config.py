@@ -3,9 +3,9 @@ Simple configuration settings for AviaNZ model training.
 Centralizes commonly used parameters to avoid magic numbers.
 """
 
-DEFAULT_SAMPLE_RATE = 32000
+DEFAULT_SAMPLE_RATE = 8000
 
-# Kaytoo-matched window: N_FFT=2048 @ 32kHz = 64ms -> freq resolution 15.6 Hz/bin
+# if 32000 we have kaytoo-matched window: N_FFT=2048 @ 32kHz = 64ms -> freq resolution 15.6 Hz/bin
 # (was 25ms / 40 Hz/bin; 10ms hop retained for time resolution)
 DEFAULT_WINDOW_SECONDS = 0.064      # 64ms window (2048 samples @ 32kHz, matches Kaytoo N_FFT)
 DEFAULT_HOP_SECONDS = 0.010         # 10ms hop
@@ -14,7 +14,7 @@ DEFAULT_TIME_BINS = 1024            # Number of time bins (width) - 1024 bins = 
 
 SPECTROGRAM_PARAMS = {
     'windowType': 'Hamming',
-    'sgType': 'Reassigned',
+    'sgType': 'Standard',
     'sgScale': 'Mel Frequency',
     'mean_normalise': False,
     'equal_loudness': False,

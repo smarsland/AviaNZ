@@ -136,9 +136,6 @@ PYTHONPATH="$REPO_ROOT" python3 \
     --max-per-species "${MAX_PER_SPECIES}" \
     --exclude-source-files "${MATCHED_AVIANZ}" \
     --label-remap "new zealand kaka:kaka,tui:tui/bellbird,bellbird:tui/bellbird" \
-    --spec-type Standard \
-    --window-type Hamming \
-    --sg-scale "Mel Frequency" \
     ${OVERWRITE_FLAG}
 
 
@@ -176,9 +173,6 @@ else
         --output "${NOISE_OUTPUT}" \
         --num-environmental "${NUM_NOISE_PER_SOURCE}" \
         --num-avianz-background "${NUM_NOISE_PER_SOURCE}" \
-        --spec-type Standard \
-        --window-type Hamming \
-        --sg-scale "Mel Frequency" \
         ${OVERWRITE_FLAG}
     echo "Noise dataset: ${NOISE_OUTPUT}/noise_combined"
 fi

@@ -17,8 +17,11 @@ from PIL import Image
 from model_testing.src.core import config
 from . import spectrogram
 import torch
-import torchaudio
-import torchaudio.compliance.kaldi
+try:
+    import torchaudio
+    import torchaudio.compliance.kaldi
+except ImportError:
+    torchaudio = None
 
 
 def smart_overwrite_folder(folder_path, preserve_noise=True):
@@ -221,6 +224,8 @@ class AudioSetFbankProcessor:
         return self._process(sound_file, start_time=float(start_time), end_time=float(end_time))
 
     def _process(self, sound_file, start_time, end_time):
+        if torchaudio is None:
+            raise ImportError("AudioSet fbank processing requires torchaudio")
         file_info = sf.info(sound_file)
         duration = file_info.frames / file_info.samplerate
 

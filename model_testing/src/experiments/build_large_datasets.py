@@ -607,19 +607,19 @@ def main():
                              '(only keep species present in both with >= min-per-class samples). '
                              'Default: keep ALL DOC species.')
     parser.add_argument(
-        '--spec-type', default='Reassigned',
+        '--spec-type', default=config.SPECTROGRAM_PARAMS['sgType'],
         choices=['Standard', 'Multi-tapered', 'Reassigned', 'Bandpass'],
-        help='Spectrogram type (default: Reassigned — best model setting)',
+        help=f"Spectrogram type (default: {config.SPECTROGRAM_PARAMS['sgType']}, from config.SPECTROGRAM_PARAMS)",
     )
     parser.add_argument(
-        '--window-type', default='Hamming',
+        '--window-type', default=config.SPECTROGRAM_PARAMS['windowType'],
         choices=['Hann', 'Hamming', 'Blackman', 'BlackmanHarris'],
-        help='Window function (default: Hamming — best model setting)',
+        help=f"Window function (default: {config.SPECTROGRAM_PARAMS['windowType']}, from config.SPECTROGRAM_PARAMS)",
     )
     parser.add_argument(
-        '--sg-scale', default='Linear',
+        '--sg-scale', default=config.SPECTROGRAM_PARAMS['sgScale'],
         choices=['Linear', 'Mel Frequency', 'Bark Frequency'],
-        help='Frequency scale (default: Linear — best model setting)',
+        help=f"Frequency scale (default: {config.SPECTROGRAM_PARAMS['sgScale']}, from config.SPECTROGRAM_PARAMS)",
     )
     args = parser.parse_args()
 

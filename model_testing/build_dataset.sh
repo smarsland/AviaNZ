@@ -17,9 +17,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 FREQ_MASK_FLAG=""
 OVERWRITE=false
 BACKGROUND_N=""
-SPEC_TYPE="Standard"
-WINDOW_TYPE="Hamming"
-SG_SCALE="Mel Frequency"
+SPEC_TYPE=""
+WINDOW_TYPE=""
+SG_SCALE=""
 DOC_RAW_OVERRIDE=""
 AVIANZ_RAW_OVERRIDE=""
 OUTPUT_BASE_OVERRIDE=""
@@ -82,9 +82,9 @@ echo "  AviaNZ raw : $AVIANZ_RAW"
 echo "  Output     : $MATCHED_BASE"
 echo "  With audio : yes"
 echo "  Freq mask  : ${FREQ_MASK_FLAG:-no}"
-  echo "  Spec type  : ${SPEC_TYPE}"
-  echo "  Window     : ${WINDOW_TYPE}"
-  echo "  Scale      : ${SG_SCALE}"
+  echo "  Spec type  : ${SPEC_TYPE:-<config.py default>}"
+  echo "  Window     : ${WINDOW_TYPE:-<config.py default>}"
+  echo "  Scale      : ${SG_SCALE:-<config.py default>}"
 echo "  Overwrite  : $OVERWRITE"
 echo "============================================================"
 echo ""
@@ -104,9 +104,9 @@ if [ "$OVERWRITE" = true ] || [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/la
         --with-audio \
         ${FREQ_MASK_FLAG:+$FREQ_MASK_FLAG} \
         ${BACKGROUND_N:+--background-n "$BACKGROUND_N"} \
-        --spec-type "$SPEC_TYPE" \
-        --window-type "$WINDOW_TYPE" \
-        --sg-scale "$SG_SCALE"
+        ${SPEC_TYPE:+--spec-type "$SPEC_TYPE"} \
+        ${WINDOW_TYPE:+--window-type "$WINDOW_TYPE"} \
+        ${SG_SCALE:+--sg-scale "$SG_SCALE"}
 else
     echo "=== Step 1: matched datasets already exist, skipping (use --overwrite to force) ==="
 fi

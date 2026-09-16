@@ -6,7 +6,7 @@ set -euo pipefail
 #   2. BirdNET pretrained
 #   3. RegNet + bg-subtract + kbird-prior 2, trained on DOC only
 #   4. RegNet + bg-subtract + kbird-prior 2, trained on DOC + AviaNZ
-#   5. RegNet + bg-subtract + kbird-prior 2 + apply-reverb, trained on DOC only
+#   5. RegNet + bg-subtract + kbird-prior 2 + apply-reverb, DOC + AviaNZ
 #   6. RegNet + bg-subtract + kbird-prior 2 + noise-mixing (freefield + AviaNZ
 #      background), trained on DOC + AviaNZ
 #
