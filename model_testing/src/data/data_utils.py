@@ -337,8 +337,7 @@ class SpectrogramDataset(Dataset):
                   f"threshold={self.reverb_threshold}sigma)")
         if self.background_prob > 0:
             print(f"⚡ Background replacement: {self.background_prob*100:.1f}% of samples replaced with background (labels zeroed)")
-        _pad_val = -16.118095650958319 if self.spec_transform == "Log" else 0.0
-        print(f"Time-axis padding: constant silence-floor value ({_pad_val:.3f} in {self.spec_transform} space)")
+        print("Time-axis padding: random sampling from existing row values")
         print(f"Final image size: {img_height}x{final_width}")
         print(f"AST patches (16x16): {height_patches}x{width_patches} = {total_patches} total patches")
     
@@ -405,13 +404,8 @@ class SpectrogramDataset(Dataset):
             if self.bg_subtract or self.median_filter:
                 data = normalize_spectrogram(data, median_filter=self.median_filter, bg_subtract=self.bg_subtract)
 
-        # Pad to fixed size with the true silence floor in transform space, then add channel dim.
-        # For plain "Log", 0.0 is NOT silence - it's e^0 = 1.0 linear power, far louder than
-        # real background (which sits near log(LOG_OFFSET) ~= -16.1). Only LogMinMax genuinely
-        # maps its floor to 0. Padding with a bare 0 there made every zero-padded (i.e. short)
-        # clip end in an artificially loud block instead of silence.
-        pad_value = -16.118095650958319 if self.spec_transform == "Log" else 0.0
-        x = self.apply_padding_and_add_channels(data, pad_value=pad_value)
+        # Pad to fixed size by sampling from existing values (per row/column), then add channel dim.
+        x = self.apply_padding_and_add_channels(data)
         assert x.ndim == 3, f"After padding should be 3D (H,W,C), got {x.shape}"
 
         # Apply temporal roll (random circular shift along time axis) during training
@@ -587,31 +581,34 @@ class SpectrogramDataset(Dataset):
         kernel = np.arange(-N, N + 1, dtype=np.float32)
         return convolve1d(spec_2d.astype(np.float32), kernel / denom, axis=1, mode='nearest')
 
-    def apply_padding_and_add_channels(self, array, is_noise=False, pad_value=0.0):
+    def apply_padding_and_add_channels(self, array, is_noise=False):
         """Apply padding and ensure correct number of channels.
 
-        Both axes are padded with a constant `pad_value` representing silence in
-        whatever transform space `array` is currently in (0.0 for linear/LogMinMax/
-        PCEN, log(LOG_OFFSET) for plain Log - see call site). Constant-valued columns
-        produce near-zero-variance conv activations, so Grad-CAM correctly ignores the
-        padded region. Random-sample padding produces non-zero activations that GAP
-        spreads uniform gradient weight over, causing Grad-CAM to spuriously highlight
-        padding — even though the model learns nothing from it.
+        Both axes are padded by randomly sampling (with replacement) from the
+        existing values along that axis, instead of a constant fill. This avoids
+        introducing an artificial block (e.g. all-zero) that background
+        subtraction/normalization - which runs before padding, but must still work
+        correctly on any spectrograms padded upstream of this call - could mistake
+        for "the background".
         """
         if len(array.shape) == 2:
             array = np.expand_dims(array, axis=-1)
 
         h, w, c = array.shape
-        
-        # Frequency axis (height): pad with the silence-floor value if needed
+
+        # Frequency axis (height): pad by sampling from existing values per (column, channel)
         if h < self.img_height:
             pad_h = self.img_height - h
-            array = np.concatenate([array, np.full((pad_h, w, c), pad_value)], axis=0)
-        
-        # Time axis (width): pad with the silence-floor value
+            indices = self.rng.randint(0, h, size=(pad_h, w, c))
+            pad_block = np.take_along_axis(array, indices, axis=0)
+            array = np.concatenate([array, pad_block], axis=0)
+
+        # Time axis (width): pad by sampling from existing values per (row, channel)
         if w < self.img_width:
             pad_w = self.img_width - w
-            array = np.concatenate([array, np.full((array.shape[0], pad_w, c), pad_value)], axis=1)
+            indices = self.rng.randint(0, w, size=(array.shape[0], pad_w, c))
+            pad_block = np.take_along_axis(array, indices, axis=1)
+            array = np.concatenate([array, pad_block], axis=1)
 
         # Channel axis: pad with zeros if needed
         if c < self.channels:

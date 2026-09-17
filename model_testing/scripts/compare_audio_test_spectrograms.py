@@ -48,7 +48,7 @@ def make_processor():
         window_seconds=0.064,
         hop_seconds=0.010,
         freq_bins=224,
-        fs=32000,
+        fs=8000,
         spec_params=params,
     )
 
@@ -180,12 +180,10 @@ def main():
 
             fig, axes = plt.subplots(2, 3, figsize=(20, 10), constrained_layout=True)
             for column, (label, path, original, transformed, info, actual_start, actual_duration) in enumerate(processed):
-                original_finite = original[np.isfinite(original)]
-                vmin, vmax = np.percentile(original_finite, [2, 98])
                 title = f"{label}\n{path.name}"
-                plot_panel(axes[0, column], original, title, info, actual_start, actual_duration, vmin, vmax)
+                plot_panel(axes[0, column], original, title, info, actual_start, actual_duration)
                 plot_panel(axes[1, column], transformed, "Background-subtracted", info,
-                           actual_start, actual_duration, vmin, vmax)
+                           actual_start, actual_duration)
             axes[0, 0].set_ylabel("Original\nMel bin")
             axes[1, 0].set_ylabel("Transformed\nMel bin")
             fig.suptitle(f"Original (top) vs background-subtracted (bottom) {index + 1:02d}",
