@@ -45,10 +45,10 @@ def make_processor():
     params["windowType"] = "Hamming"
     params["sgScale"] = "Mel Frequency"
     return SpectrogramProcessor(
-        window_seconds=0.064,
-        hop_seconds=0.010,
-        freq_bins=224,
-        fs=8000,
+        window_seconds=config.DEFAULT_WINDOW_SECONDS,
+        hop_seconds=config.DEFAULT_HOP_SECONDS,
+        freq_bins=config.DEFAULT_FREQ_BINS,
+        fs=config.DEFAULT_SAMPLE_RATE,
         spec_params=params,
     )
 
