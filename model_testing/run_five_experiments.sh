@@ -12,6 +12,8 @@ set -euo pipefail
 #      trained on DOC + AviaNZ (robustness to recorder/mic differences)
 #   7. RegNet + bg-subtract + kbird-prior 2 + freeze-stages 2, trained on
 #      DOC + AviaNZ (keep early pretrained features generic)
+#   8. RegNet + bg-subtract + kbird-prior 2 + noise-mixing (freefield wind/rain
+#      + AviaNZ background gaps), trained on DOC + AviaNZ
 #
 # Usage:
 #   bash run_five_experiments.sh
@@ -30,6 +32,7 @@ KAYTOO_CORES="${KAYTOO_CORES:-4}"
 KAYTOO_PYTHON="${KAYTOO_PYTHON:-$KAYTOO_ROOT/venv_kay/bin/python}"
 FORCE=false
 REBUILD_DATA=false
+NUM_NOISE_PER_SOURCE="${NUM_NOISE_PER_SOURCE:-20000}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,6 +41,7 @@ while [[ $# -gt 0 ]]; do
     --avianz-raw) AVIANZ_RAW_DIR_OVERRIDE="$2"; shift 2 ;;
     --kaytoo-root) KAYTOO_ROOT="$2"; shift 2 ;;
     --kaytoo-cores) KAYTOO_CORES="$2"; shift 2 ;;
+    --noise-count) NUM_NOISE_PER_SOURCE="$2"; shift 2 ;;
     --force) FORCE=true; shift ;;
     --rebuild-data) REBUILD_DATA=true; shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -68,6 +72,9 @@ OUT_REGNET_COMBINED="${OUT_ROOT}/regnet_combined_bgsubtract_seed0"
 OUT_REGNET_NOBGSUB="${OUT_ROOT}/regnet_combined_nobgsubtract"
 OUT_REGNET_DELTAS="${OUT_ROOT}/regnet_combined_bgsub_deltas"
 OUT_REGNET_FREEZE="${OUT_ROOT}/regnet_combined_bgsub_freeze2"
+OUT_REGNET_NOISE="${OUT_ROOT}/regnet_combined_bgsub_noisemix"
+NOISE_FOLDER="${NOISE_FOLDER:-${BASE}/noise_dataset/noise_combined}"
+NOISE_RATIO="${NOISE_RATIO:-0.2}"
 
 PRETRAINED_MODEL="${BIRDCLEF_PRETRAINED_PATH:-BirdClefModels/model_fold0.pth}"
 
@@ -107,12 +114,14 @@ fi
 if [[ "$REBUILD_DATA" == true \
    || ! -f "$COMBINED_DATASET/labels.json" \
    || ! -f "$COMBINED_AVIANZ_TEST/labels.json" \
-   || ! -f "$COMBINED_DOC_TEST/labels.json" ]]; then
+   || ! -f "$COMBINED_DOC_TEST/labels.json" \
+   || ! -f "$NOISE_FOLDER/labels.json" ]]; then
   echo ""
   echo ">>> Combined dataset"
   AVIA_NZ_BASE="$BASE" \
   DOC_RAW_DIR="$DOC_RAW_DIR_OVERRIDE" \
-    bash build_combined_dataset.sh --skip-noise ${BUILD_FLAGS[@]+"${BUILD_FLAGS[@]}"}
+  NUM_NOISE_PER_SOURCE="$NUM_NOISE_PER_SOURCE" \
+    bash build_combined_dataset.sh ${BUILD_FLAGS[@]+"${BUILD_FLAGS[@]}"}
 else
   echo "--- combined dataset: present, skipping build"
 fi
@@ -158,7 +167,7 @@ done
 
 # -------------------------------------------------------- 3. RegNet / DOC
 echo ""
-echo ">>> 3/7 RegNet + bgsub, DOC only"
+echo ">>> 3/8 RegNet + bgsub, DOC only"
 
 # Training
 training_marker="$OUT_REGNET_DOC/training_history.json"
@@ -197,7 +206,7 @@ done
 
 # --------------------------------------------------- 4. RegNet / combined
 echo ""
-echo ">>> 4/7 RegNet + bgsub, combined DOC + AviaNZ"
+echo ">>> 4/8 RegNet + bgsub, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_COMBINED/training_history.json"
@@ -236,7 +245,7 @@ done
 
 # --------------------------------------- 5. RegNet / combined, no bg-subtract
 echo ""
-echo ">>> 5/7 RegNet, combined DOC + AviaNZ, NO bg-subtract (ablation vs 4/7)"
+echo ">>> 5/8 RegNet, combined DOC + AviaNZ, NO bg-subtract (ablation vs 4/8)"
 
 # Training
 training_marker="$OUT_REGNET_NOBGSUB/training_history.json"
@@ -273,7 +282,7 @@ done
 
 # -------------------------------------------- 6. RegNet + bgsub + deltas
 echo ""
-echo ">>> 6/7 RegNet + bgsub + deltas, combined DOC + AviaNZ"
+echo ">>> 6/8 RegNet + bgsub + deltas, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_DELTAS/training_history.json"
@@ -314,7 +323,7 @@ done
 
 # --------------------------------------- 7. RegNet + bgsub + freeze-stages 2
 echo ""
-echo ">>> 7/7 RegNet + bgsub + freeze-stages 2, combined DOC + AviaNZ"
+echo ">>> 7/8 RegNet + bgsub + freeze-stages 2, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_FREEZE/training_history.json"
@@ -352,6 +361,52 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
     --eval-only --test-folder "$folder"
   touch "$marker"
 done
+
+# ----------------------------------------------- 8. RegNet + bgsub + noise-mixing
+echo ""
+echo ">>> 8/8 RegNet + bgsub + noise-mixing (freefield wind/rain + AviaNZ background)"
+
+if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
+  echo "  WARNING: noise folder not found at $NOISE_FOLDER"
+  echo "  Build it first with: bash build_combined_dataset.sh (or scripts/build_noise_dataset.py)"
+else
+  # Training
+  training_marker="$OUT_REGNET_NOISE/training_history.json"
+  if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+    echo "  Training already done, skipping"
+  else
+    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE" \
+      --model-type regnet \
+      --pretrained "$PRETRAINED_MODEL" \
+      --spec-transform Log \
+      --bg-subtract \
+      --kbird-prior 2.0 \
+      --noise-folder "$NOISE_FOLDER" \
+      --noise "$NOISE_RATIO" \
+      --epochs 40 --patience 15 --seed 0
+  fi
+
+  # Evaluation
+  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    dataset_key="$(get_dataset_key "$folder")"
+    marker="$OUT_REGNET_NOISE/$dataset_key/done"
+
+    if [[ "$FORCE" == false && -f "$marker" ]]; then
+      echo "  Skipping $dataset_key (already evaluated)"
+      continue
+    fi
+
+    mkdir -p "$(dirname "$marker")"
+    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE" \
+      --model-type regnet \
+      --spec-transform Log \
+      --bg-subtract \
+      --kbird-prior 2.0 \
+      --seed 0 \
+      --eval-only --test-folder "$folder"
+    touch "$marker"
+  done
+fi
 
 echo ""
 echo "All experiments complete!"
