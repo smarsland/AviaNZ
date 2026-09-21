@@ -35,28 +35,19 @@ AST_STD = 4.5689974
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_EPOCHS = 50
 DEFAULT_LEARNING_RATE = 3.073e-5
-DEFAULT_CNN_LEARNING_RATE = 1e-3  # CNN models need higher learning rates
+DEFAULT_CNN_LEARNING_RATE = 1e-3
 DEFAULT_CHANNELS = 1
-DEFAULT_DROPOUT = 0.30  # Increased for better regularization with longer clips
-DEFAULT_MIXUP_ALPHA = 0.25  # Reduced to match best practices (Kaytoo uses 0.25, spectrogram-level mixing)
-DEFAULT_WEIGHT_DECAY = 1e-5  # Reduced slightly for AdamW
-DEFAULT_BCE_SMOOTHING = 0.001  # Minimal smoothing to prevent overconfidence
-
-# GENERALIZATION IMPROVEMENTS (uncomment and adjust as needed):
-# For better cross-domain generalization, try these settings:
-# DEFAULT_DROPOUT = 0.50  # Higher dropout reduces overfitting to source domain
-# DEFAULT_MIXUP_ALPHA = 0.35  # More aggressive mixing improves robustness
-# DEFAULT_NOISE_RATIO = 0.2  # Add background noise augmentation
-# DEFAULT_TIME_STRETCH_RANGE = (0.8, 1.2)  # Wider time stretch range
-# Early stopping: stop if validation doesn't improve for 10 epochs
-# Test-time augmentation: use tta_utils.py for 2-5% accuracy boost
+DEFAULT_DROPOUT = 0.30
+DEFAULT_MIXUP_ALPHA = 0.25
+DEFAULT_WEIGHT_DECAY = 1e-5
+DEFAULT_BCE_SMOOTHING = 0.001
 
 # Data loading defaults
 DEFAULT_MAX_SPECIES = 50
 DEFAULT_MIN_EXAMPLES = 1000
 DEFAULT_MAX_SAMPLES = 2000
 DEFAULT_VALIDATION_SHARE = 0.2
-DEFAULT_NOISE_RATIO = 0.0  # Disabled by default to avoid accidental label corruption; enable explicitly when using a true noise-only folder
+DEFAULT_NOISE_RATIO = 0.0
 DEFAULT_NOISE_SAMPLES = 1000
 
 # Spectrogram augmentation (applied during training)
@@ -64,11 +55,6 @@ DEFAULT_TIME_STRETCH_RANGE = (0.9, 1.1)  # ±10% time stretching
 DEFAULT_PITCH_SHIFT_RANGE = (-2, 2)  # ±2 semitones pitch shifting
 DEFAULT_FREQ_SHIFT_RANGE = (-10, 10)  # ±10 bins frequency shifting
 DEFAULT_TEMPORAL_ROLL = True  # Enable temporal rolling augmentation (randomizes start position in tiled/repeated signals)
-
-# Confusion sampling defaults (deprecated - confusion_sampling=False is optimal)
-DEFAULT_CONFUSION_EVAL_FREQUENCY = 5
-DEFAULT_CONFUSION_BOOST_FACTOR = 1.5
-DEFAULT_CONFUSION_TOP_K = 10
 
 # File processing limits (in seconds)
 MAX_FILE_DURATION_SECONDS = 10000

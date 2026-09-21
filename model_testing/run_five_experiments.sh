@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run the six comparison experiments:
+# Run the comparison experiments:
 #   1. Kaytoo pretrained
 #   2. BirdNET pretrained
 #   3. RegNet + bg-subtract + kbird-prior 2, trained on DOC only
 #   4. RegNet + bg-subtract + kbird-prior 2, trained on DOC + AviaNZ
-#   5. RegNet + bg-subtract + kbird-prior 2 + apply-reverb, DOC + AviaNZ
-#   6. RegNet + bg-subtract + kbird-prior 2 + noise-mixing (freefield + AviaNZ
-#      background), trained on DOC + AviaNZ
+#   5. RegNet (no bg-subtract) + kbird-prior 2, trained on DOC + AviaNZ
+#      (ablation vs 4: is bg-subtract helping or hurting domain generalization?)
+#   6. RegNet + bg-subtract + kbird-prior 2 + delta/delta-delta channels,
+#      trained on DOC + AviaNZ (robustness to recorder/mic differences)
+#   7. RegNet + bg-subtract + kbird-prior 2 + freeze-stages 2, trained on
+#      DOC + AviaNZ (keep early pretrained features generic)
 #
 # Usage:
 #   bash run_five_experiments.sh
@@ -27,7 +30,6 @@ KAYTOO_CORES="${KAYTOO_CORES:-4}"
 KAYTOO_PYTHON="${KAYTOO_PYTHON:-$KAYTOO_ROOT/venv_kay/bin/python}"
 FORCE=false
 REBUILD_DATA=false
-NUM_NOISE_PER_SOURCE="${NUM_NOISE_PER_SOURCE:-20000}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -36,7 +38,6 @@ while [[ $# -gt 0 ]]; do
     --avianz-raw) AVIANZ_RAW_DIR_OVERRIDE="$2"; shift 2 ;;
     --kaytoo-root) KAYTOO_ROOT="$2"; shift 2 ;;
     --kaytoo-cores) KAYTOO_CORES="$2"; shift 2 ;;
-    --noise-count) NUM_NOISE_PER_SOURCE="$2"; shift 2 ;;
     --force) FORCE=true; shift ;;
     --rebuild-data) REBUILD_DATA=true; shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -64,12 +65,9 @@ OUT_KAYTOO="${OUT_ROOT}/kaytoo_pretrained_seed0"
 OUT_BIRDNET="${OUT_ROOT}/birdnet_pretrained_seed0"
 OUT_REGNET_DOC="${OUT_ROOT}/regnet_on_doc_bgsub"
 OUT_REGNET_COMBINED="${OUT_ROOT}/regnet_combined_bgsubtract_seed0"
-OUT_REGNET_REVERB="${OUT_ROOT}/regnet_bgsub_reverb"
-OUT_REGNET_NOISE="${OUT_ROOT}/regnet_combined_bgsub_noisemix"
-OUT_REGNET_NOISE_REVERB="${OUT_ROOT}/regnet_combined_bgsub_noisemix_reverb"
-OUT_REGNET_NOISE_REVERB_KBIRD="${OUT_ROOT}/regnet_combined_bgsub_noisemix_reverb_kbird"
-NOISE_FOLDER="${NOISE_FOLDER:-${BASE}/noise_dataset/noise_combined}"
-NOISE_RATIO="${NOISE_RATIO:-0.2}"
+OUT_REGNET_NOBGSUB="${OUT_ROOT}/regnet_combined_nobgsubtract"
+OUT_REGNET_DELTAS="${OUT_ROOT}/regnet_combined_bgsub_deltas"
+OUT_REGNET_FREEZE="${OUT_ROOT}/regnet_combined_bgsub_freeze2"
 
 PRETRAINED_MODEL="${BIRDCLEF_PRETRAINED_PATH:-BirdClefModels/model_fold0.pth}"
 
@@ -109,14 +107,12 @@ fi
 if [[ "$REBUILD_DATA" == true \
    || ! -f "$COMBINED_DATASET/labels.json" \
    || ! -f "$COMBINED_AVIANZ_TEST/labels.json" \
-   || ! -f "$COMBINED_DOC_TEST/labels.json" \
-   || ! -f "$NOISE_FOLDER/labels.json" ]]; then
+   || ! -f "$COMBINED_DOC_TEST/labels.json" ]]; then
   echo ""
   echo ">>> Combined dataset"
   AVIA_NZ_BASE="$BASE" \
   DOC_RAW_DIR="$DOC_RAW_DIR_OVERRIDE" \
-  NUM_NOISE_PER_SOURCE="$NUM_NOISE_PER_SOURCE" \
-    bash build_combined_dataset.sh ${BUILD_FLAGS[@]+"${BUILD_FLAGS[@]}"}
+    bash build_combined_dataset.sh --skip-noise ${BUILD_FLAGS[@]+"${BUILD_FLAGS[@]}"}
 else
   echo "--- combined dataset: present, skipping build"
 fi
@@ -162,7 +158,7 @@ done
 
 # -------------------------------------------------------- 3. RegNet / DOC
 echo ""
-echo ">>> 3/5 RegNet + bgsub, DOC only"
+echo ">>> 3/7 RegNet + bgsub, DOC only"
 
 # Training
 training_marker="$OUT_REGNET_DOC/training_history.json"
@@ -201,7 +197,7 @@ done
 
 # --------------------------------------------------- 4. RegNet / combined
 echo ""
-echo ">>> 4/5 RegNet + bgsub, combined DOC + AviaNZ"
+echo ">>> 4/7 RegNet + bgsub, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_COMBINED/training_history.json"
@@ -238,186 +234,124 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   touch "$marker"
 done
 
-# --------------------------------------------------- 5. RegNet + reverb
+# --------------------------------------- 5. RegNet / combined, no bg-subtract
 echo ""
-echo ">>> 5/6 RegNet + bgsub + apply-reverb"
+echo ">>> 5/7 RegNet, combined DOC + AviaNZ, NO bg-subtract (ablation vs 4/7)"
 
 # Training
-training_marker="$OUT_REGNET_REVERB/training_history.json"
+training_marker="$OUT_REGNET_NOBGSUB/training_history.json"
 if [[ "$FORCE" == false && -f "$training_marker" ]]; then
   echo "  Training already done, skipping"
 else
-  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_REVERB" \
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOBGSUB" \
     --model-type regnet \
     --pretrained "$PRETRAINED_MODEL" \
     --spec-transform Log \
-    --bg-subtract \
     --kbird-prior 2.0 \
-    --apply-reverb \
     --epochs 40 --patience 15 --seed 0
 fi
 
 # Evaluation
 for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   dataset_key="$(get_dataset_key "$folder")"
-  marker="$OUT_REGNET_REVERB/$dataset_key/done"
-  
+  marker="$OUT_REGNET_NOBGSUB/$dataset_key/done"
+
   if [[ "$FORCE" == false && -f "$marker" ]]; then
     echo "  Skipping $dataset_key (already evaluated)"
     continue
   fi
-  
+
   mkdir -p "$(dirname "$marker")"
-  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_REVERB" \
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOBGSUB" \
     --model-type regnet \
     --spec-transform Log \
-    --bg-subtract \
     --kbird-prior 2.0 \
     --seed 0 \
     --eval-only --test-folder "$folder"
   touch "$marker"
 done
 
-# ----------------------------------------------- 6. RegNet + noise-mixing
+# -------------------------------------------- 6. RegNet + bgsub + deltas
 echo ""
-echo ">>> 6/6 RegNet + bgsub + noise-mixing (freefield + AviaNZ background)"
+echo ">>> 6/7 RegNet + bgsub + deltas, combined DOC + AviaNZ"
 
-if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
-  echo "  WARNING: noise folder not found at $NOISE_FOLDER"
-  echo "  Build it first with: bash build_combined_dataset.sh (or scripts/build_noise_dataset.py)"
+# Training
+training_marker="$OUT_REGNET_DELTAS/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
 else
-  # Training
-  training_marker="$OUT_REGNET_NOISE/training_history.json"
-  if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-    echo "  Training already done, skipping"
-  else
-    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE" \
-      --model-type regnet \
-      --pretrained "$PRETRAINED_MODEL" \
-      --spec-transform Log \
-      --bg-subtract \
-      --kbird-prior 2.0 \
-      --noise-folder "$NOISE_FOLDER" \
-      --noise "$NOISE_RATIO" \
-      --epochs 40 --patience 15 --seed 0
-  fi
-
-  # Evaluation
-  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-    dataset_key="$(get_dataset_key "$folder")"
-    marker="$OUT_REGNET_NOISE/$dataset_key/done"
-
-    if [[ "$FORCE" == false && -f "$marker" ]]; then
-      echo "  Skipping $dataset_key (already evaluated)"
-      continue
-    fi
-
-    mkdir -p "$(dirname "$marker")"
-    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE" \
-      --model-type regnet \
-      --spec-transform Log \
-      --bg-subtract \
-      --kbird-prior 2.0 \
-      --seed 0 \
-      --eval-only --test-folder "$folder"
-    touch "$marker"
-  done
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_DELTAS" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --bg-subtract \
+    --deltas \
+    --kbird-prior 2.0 \
+    --epochs 40 --patience 15 --seed 0
 fi
 
-# ----------------------------------------------- 7. RegNet + noise-mixing + apply-reverb
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_DELTAS/$dataset_key/done"
 
-echo ""
-echo ">>> 7/7 RegNet + bgsub + noise-mixing + apply-reverb (freefield + AviaNZ background)"
-
-if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
-  echo "  WARNING: noise folder not found at $NOISE_FOLDER"
-  echo "  Build it first with: bash build_combined_dataset.sh (or scripts/build_noise_dataset.py)"
-else
-  # Training
-  training_marker="$OUT_REGNET_NOISE_REVERB/training_history.json"
-  if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-    echo "  Training already done, skipping"
-  else
-    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE_REVERB" \
-      --model-type regnet \
-      --pretrained "$PRETRAINED_MODEL" \
-      --spec-transform Log \
-      --bg-subtract \
-      --kbird-prior 2.0 \
-      --noise-folder "$NOISE_FOLDER" \
-      --noise "$NOISE_RATIO" \
-      --apply-reverb \
-      --epochs 40 --patience 15 --seed 0
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
   fi
 
-  # Evaluation
-  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-    dataset_key="$(get_dataset_key "$folder")"
-    marker="$OUT_REGNET_NOISE_REVERB/$dataset_key/done"
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_DELTAS" \
+    --model-type regnet \
+    --spec-transform Log \
+    --bg-subtract \
+    --deltas \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
-    if [[ "$FORCE" == false && -f "$marker" ]]; then
-      echo "  Skipping $dataset_key (already evaluated)"
-      continue
-    fi
+# --------------------------------------- 7. RegNet + bgsub + freeze-stages 2
+echo ""
+echo ">>> 7/7 RegNet + bgsub + freeze-stages 2, combined DOC + AviaNZ"
 
-    mkdir -p "$(dirname "$marker")"
-    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE_REVERB" \
-      --model-type regnet \
-      --spec-transform Log \
-      --bg-subtract \
-      --kbird-prior 2.0 \
-      --seed 0 \
-      --eval-only --test-folder "$folder"
-    touch "$marker"
-  done
+# Training
+training_marker="$OUT_REGNET_FREEZE/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FREEZE" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --bg-subtract \
+    --freeze-stages 2 \
+    --kbird-prior 2.0 \
+    --epochs 40 --patience 15 --seed 0
 fi
 
-# ----------------------------------------------- 8. RegNet + noise-mixing + apply-reverb + k-bird 1
-echo ""
-echo ">>> 8/8 RegNet + bgsub + noise-mixing + apply-reverb + k-bird 1 (freefield + AviaNZ background)"
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_FREEZE/$dataset_key/done"
 
-if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
-  echo "  WARNING: noise folder not found at $NOISE_FOLDER"
-  echo "  Build it first with: bash build_combined_dataset.sh (or scripts/build_noise_dataset.py)"
-else
-  # Training
-  training_marker="$OUT_REGNET_NOISE_REVERB_KBIRD/training_history.json"
-  if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-    echo "  Training already done, skipping"
-  else
-    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE_REVERB_KBIRD" \
-      --model-type regnet \
-      --pretrained "$PRETRAINED_MODEL" \
-      --spec-transform Log \
-      --bg-subtract \
-      --kbird-prior 1.0 \
-      --noise-folder "$NOISE_FOLDER" \
-      --noise "$NOISE_RATIO" \
-      --apply-reverb \
-      --epochs 40 --patience 15 --seed 0
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
   fi
 
-  # Evaluation
-  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-    dataset_key="$(get_dataset_key "$folder")"
-    marker="$OUT_REGNET_NOISE_REVERB_KBIRD/$dataset_key/done"
-
-    if [[ "$FORCE" == false && -f "$marker" ]]; then
-      echo "  Skipping $dataset_key (already evaluated)"
-      continue
-    fi
-
-    mkdir -p "$(dirname "$marker")"
-    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE_REVERB_KBIRD" \
-      --model-type regnet \
-      --spec-transform Log \
-      --bg-subtract \
-      --kbird-prior 1.0 \
-      --seed 0 \
-      --eval-only --test-folder "$folder"
-    touch "$marker"
-  done
-fi
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FREEZE" \
+    --model-type regnet \
+    --spec-transform Log \
+    --bg-subtract \
+    --freeze-stages 2 \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
 echo ""
 echo "All experiments complete!"

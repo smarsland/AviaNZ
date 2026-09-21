@@ -52,3 +52,5 @@ Docs/FilterTraining.soc
 .github/
 
 tests*
+model_testing/model_tests/
+model_testing/results_figure*
