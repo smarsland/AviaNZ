@@ -95,6 +95,10 @@ Examples:
                             "robustness to recording-level and microphone-response differences.")
     parser.add_argument('--no-background', action='store_true', dest='no_background',
                        help="Ignore all-zero (background/no-bird) training samples")
+    parser.add_argument('--background-prob', type=float, default=0.0, dest='background_prob',
+                       help="Probability of replacing a training sample with a synthetic "
+                            "foreground-removed background version (labels zeroed) instead of "
+                            "the original (default: 0.0 = disabled, try 0.5)")
     parser.add_argument('--use-asl', action='store_true', dest='use_asl',
                        help="Use Asymmetric Loss (ASL) instead of BCE — clips easy-negative gradients, "
                             "reducing gradient suppression from all-background samples")

@@ -14,6 +14,9 @@ set -euo pipefail
 #      DOC + AviaNZ (keep early pretrained features generic)
 #   8. RegNet + bg-subtract + kbird-prior 2 + noise-mixing (freefield wind/rain
 #      + AviaNZ background gaps), trained on DOC + AviaNZ
+#   9. RegNet + bg-subtract + kbird-prior 2 + background-prob 0.5 (50% of the
+#      time, replace the sample with its foreground-removed/background-only
+#      version and zero the labels), trained on DOC + AviaNZ
 #
 # Usage:
 #   bash run_five_experiments.sh
@@ -73,6 +76,7 @@ OUT_REGNET_NOBGSUB="${OUT_ROOT}/regnet_combined_nobgsubtract"
 OUT_REGNET_DELTAS="${OUT_ROOT}/regnet_combined_bgsub_deltas"
 OUT_REGNET_FREEZE="${OUT_ROOT}/regnet_combined_bgsub_freeze2"
 OUT_REGNET_NOISE="${OUT_ROOT}/regnet_combined_bgsub_noisemix"
+OUT_REGNET_BGPROB="${OUT_ROOT}/regnet_combined_bgsub_bgprob50"
 NOISE_FOLDER="${NOISE_FOLDER:-${BASE}/noise_dataset/noise_combined}"
 NOISE_RATIO="${NOISE_RATIO:-0.2}"
 
@@ -167,7 +171,7 @@ done
 
 # -------------------------------------------------------- 3. RegNet / DOC
 echo ""
-echo ">>> 3/8 RegNet + bgsub, DOC only"
+echo ">>> 3/9 RegNet + bgsub, DOC only"
 
 # Training
 training_marker="$OUT_REGNET_DOC/training_history.json"
@@ -206,7 +210,7 @@ done
 
 # --------------------------------------------------- 4. RegNet / combined
 echo ""
-echo ">>> 4/8 RegNet + bgsub, combined DOC + AviaNZ"
+echo ">>> 4/9 RegNet + bgsub, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_COMBINED/training_history.json"
@@ -245,7 +249,7 @@ done
 
 # --------------------------------------- 5. RegNet / combined, no bg-subtract
 echo ""
-echo ">>> 5/8 RegNet, combined DOC + AviaNZ, NO bg-subtract (ablation vs 4/8)"
+echo ">>> 5/9 RegNet, combined DOC + AviaNZ, NO bg-subtract (ablation vs 4/9)"
 
 # Training
 training_marker="$OUT_REGNET_NOBGSUB/training_history.json"
@@ -282,7 +286,7 @@ done
 
 # -------------------------------------------- 6. RegNet + bgsub + deltas
 echo ""
-echo ">>> 6/8 RegNet + bgsub + deltas, combined DOC + AviaNZ"
+echo ">>> 6/9 RegNet + bgsub + deltas, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_DELTAS/training_history.json"
@@ -323,7 +327,7 @@ done
 
 # --------------------------------------- 7. RegNet + bgsub + freeze-stages 2
 echo ""
-echo ">>> 7/8 RegNet + bgsub + freeze-stages 2, combined DOC + AviaNZ"
+echo ">>> 7/9 RegNet + bgsub + freeze-stages 2, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_FREEZE/training_history.json"
@@ -364,7 +368,7 @@ done
 
 # ----------------------------------------------- 8. RegNet + bgsub + noise-mixing
 echo ""
-echo ">>> 8/8 RegNet + bgsub + noise-mixing (freefield wind/rain + AviaNZ background)"
+echo ">>> 8/9 RegNet + bgsub + noise-mixing (freefield wind/rain + AviaNZ background)"
 
 if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
   echo "  WARNING: noise folder not found at $NOISE_FOLDER"
@@ -407,6 +411,47 @@ else
     touch "$marker"
   done
 fi
+
+# ----------------------------------------------- 9. RegNet + bgsub + background-prob 0.5
+echo ""
+echo ">>> 9/9 RegNet + bgsub + background-prob 0.5, combined DOC + AviaNZ"
+
+# Training
+training_marker="$OUT_REGNET_BGPROB/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_BGPROB" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --bg-subtract \
+    --background-prob 0.5 \
+    --kbird-prior 2.0 \
+    --epochs 40 --patience 15 --seed 0
+fi
+
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_BGPROB/$dataset_key/done"
+
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
+
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_BGPROB" \
+    --model-type regnet \
+    --spec-transform Log \
+    --bg-subtract \
+    --background-prob 0.5 \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
 echo ""
 echo "All experiments complete!"
