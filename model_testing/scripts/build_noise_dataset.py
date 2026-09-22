@@ -86,15 +86,18 @@ def build_avianz_background_noise(avianz_raw_folders, output_folder, num_samples
     for folder in avianz_raw_folders:
         wav_files = proc.find_wav_files(folder)
         print(f"  Scanning {len(wav_files)} wav files in {folder}...")
-        for wav_file in wav_files:
+        for i, wav_file in enumerate(wav_files):
             data_file = wav_file + '.data'
             if not os.path.exists(data_file):
                 continue
             try:
                 segments = proc.load_annotation_file(data_file)
-                duration = sf.info(wav_file).frames / sf.info(wav_file).samplerate
+                info = sf.info(wav_file)
+                duration = info.frames / info.samplerate
             except Exception:
                 continue
+            if (i + 1) % progress_every == 0:
+                print(f"    ...{i + 1}/{len(wav_files)} wav files checked, {len(candidates)} gaps found so far")
             for gap_start, gap_end in find_annotation_gaps(segments, duration, min_gap_seconds):
                 # One candidate clip per gap (sampled uniformly within the gap)
                 candidates.append((wav_file, gap_start, gap_end))

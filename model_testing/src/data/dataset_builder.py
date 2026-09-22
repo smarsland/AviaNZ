@@ -5,6 +5,8 @@ import csv
 import ast
 import argparse
 import random
+import time
+import hashlib
 import numpy as np
 import subprocess
 import tempfile
@@ -15,6 +17,17 @@ from . import wavio
 from .spectrogram_utils import SpectrogramProcessor, AudioSetFbankProcessor, smart_overwrite_folder
 from .data_pipeline import Segment
 import soundfile as sf
+
+# Local cache for find_wav_files() directory walks. Network-mounted (SMB) raw
+# audio drives make os.walk() take minutes per call, and the same folders get
+# rescanned repeatedly across build_matched_datasets.py / build_large_datasets.py
+# / build_noise_dataset.py in a single session - cache the results locally
+# instead of walking the remote share every time. Override with env var, or
+# delete the cache dir to force a rescan.
+WAV_SCAN_CACHE_DIR = os.environ.get(
+    "AVIANZ_WAV_SCAN_CACHE", os.path.join(os.path.expanduser("~"), ".cache", "avianz_wav_scan")
+)
+WAV_SCAN_CACHE_MAX_AGE_HOURS = float(os.environ.get("AVIANZ_WAV_SCAN_CACHE_HOURS", "24"))
 
 
 class SegmentExtractor:
@@ -234,12 +247,41 @@ class AviaNZDataProcessor(BaseDataProcessor):
         
         return segments
 
-    def find_wav_files(self, folder):
+    def find_wav_files(self, folder, use_cache=True):
+        """Recursively find .wav files under `folder`, cached locally by resolved
+        path (see WAV_SCAN_CACHE_DIR) since walking network-mounted drives is slow
+        and the same folders get rescanned repeatedly across build scripts."""
+        resolved = os.path.realpath(folder)
+        cache_path = None
+        if use_cache:
+            os.makedirs(WAV_SCAN_CACHE_DIR, exist_ok=True)
+            key = hashlib.sha1(resolved.encode()).hexdigest()
+            cache_path = os.path.join(WAV_SCAN_CACHE_DIR, f"{key}.json")
+            if os.path.exists(cache_path):
+                age_hours = (time.time() - os.path.getmtime(cache_path)) / 3600
+                if age_hours <= WAV_SCAN_CACHE_MAX_AGE_HOURS:
+                    with open(cache_path) as f:
+                        cached = json.load(f)
+                    if cached.get('folder') == resolved:
+                        print(f"  find_wav_files: using cached scan of {resolved} "
+                              f"({len(cached['wav_files'])} files, {age_hours:.1f}h old; "
+                              f"delete {WAV_SCAN_CACHE_DIR} or set AVIANZ_WAV_SCAN_CACHE_HOURS=0 to force a rescan)")
+                        return cached['wav_files']
+
         wav_files = []
+        n_dirs = 0
         for root, dirs, files in os.walk(folder):
+            n_dirs += 1
             for file in files:
                 if file.lower().endswith('.wav') and not file.endswith('.backup'):
                     wav_files.append(os.path.join(root, file))
+            if n_dirs % 200 == 0:
+                print(f"  find_wav_files: scanned {n_dirs} directories, {len(wav_files)} wav files so far...")
+
+        if cache_path:
+            with open(cache_path, 'w') as f:
+                json.dump({'folder': resolved, 'wav_files': wav_files}, f)
+
         return wav_files
 
     def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None, max_samples=None, specific_species=None, ignore_multilabel=False, max_species=None, min_examples=None):
