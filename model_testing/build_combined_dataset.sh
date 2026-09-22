@@ -93,7 +93,7 @@ fi
 
 
 OUTPUT="${BASE}/combined_dataset"
-MAX_PER_SPECIES="${MAX_PER_SPECIES:-2000}"
+MAX_PER_SPECIES="${MAX_PER_SPECIES:-500}"
 MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"
 
 FREEFIELD_DIR="${FREEFIELD_DIR:-${SERVER_PREFIX}_02/freefield}"

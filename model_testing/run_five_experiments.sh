@@ -8,15 +8,21 @@ set -euo pipefail
 #   4. RegNet + bg-subtract + kbird-prior 2, trained on DOC + AviaNZ
 #   5. RegNet (no bg-subtract) + kbird-prior 2, trained on DOC + AviaNZ
 #      (ablation vs 4: is bg-subtract helping or hurting domain generalization?)
-#   6. RegNet + bg-subtract + kbird-prior 2 + delta/delta-delta channels,
+#   6. RegNet (no bg-subtract) + kbird-prior 2 + delta/delta-delta channels,
 #      trained on DOC + AviaNZ (robustness to recorder/mic differences)
-#   7. RegNet + bg-subtract + kbird-prior 2 + freeze-stages 2, trained on
+#   7. RegNet (no bg-subtract) + kbird-prior 2 + freeze-stages 2, trained on
 #      DOC + AviaNZ (keep early pretrained features generic)
-#   8. RegNet + bg-subtract + kbird-prior 2 + noise-mixing (freefield wind/rain
-#      + AviaNZ background gaps), trained on DOC + AviaNZ
-#   9. RegNet + bg-subtract + kbird-prior 2 + background-prob 0.5 (50% of the
-#      time, replace the sample with its foreground-removed/background-only
+#   8. RegNet (no bg-subtract) + kbird-prior 2 + noise-mixing (freefield
+#      wind/rain + AviaNZ background gaps) + apply-reverb, trained on
+#      DOC + AviaNZ
+#   9. RegNet (no bg-subtract) + kbird-prior 2 + background-prob 0.5 (50% of
+#      the time, replace the sample with its foreground-removed/background-only
 #      version and zero the labels), trained on DOC + AviaNZ
+#
+# 6-9 build on the no-bg-subtract baseline (5), not bg-subtract (4): the
+# bg-subtract vs no-bg-subtract ablation showed no-bg-subtract wins decisively
+# on the AviaNZ domain-shift target (matched_avianz macro 0.256->0.343, exact
+# 3.3%->37.4%), so further augmentations should stack on the better baseline.
 #
 # Usage:
 #   bash run_five_experiments.sh
@@ -73,10 +79,10 @@ OUT_BIRDNET="${OUT_ROOT}/birdnet_pretrained_seed0"
 OUT_REGNET_DOC="${OUT_ROOT}/regnet_on_doc_bgsub"
 OUT_REGNET_COMBINED="${OUT_ROOT}/regnet_combined_bgsubtract_seed0"
 OUT_REGNET_NOBGSUB="${OUT_ROOT}/regnet_combined_nobgsubtract"
-OUT_REGNET_DELTAS="${OUT_ROOT}/regnet_combined_bgsub_deltas"
-OUT_REGNET_FREEZE="${OUT_ROOT}/regnet_combined_bgsub_freeze2"
-OUT_REGNET_NOISE="${OUT_ROOT}/regnet_combined_bgsub_noisemix"
-OUT_REGNET_BGPROB="${OUT_ROOT}/regnet_combined_bgsub_bgprob50"
+OUT_REGNET_DELTAS="${OUT_ROOT}/regnet_combined_deltas"
+OUT_REGNET_FREEZE="${OUT_ROOT}/regnet_combined_freeze2"
+OUT_REGNET_NOISE="${OUT_ROOT}/regnet_combined_noisemix_reverb"
+OUT_REGNET_BGPROB="${OUT_ROOT}/regnet_combined_bgprob50"
 NOISE_FOLDER="${NOISE_FOLDER:-${BASE}/noise_dataset/noise_combined}"
 NOISE_RATIO="${NOISE_RATIO:-0.2}"
 
@@ -284,9 +290,9 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   touch "$marker"
 done
 
-# -------------------------------------------- 6. RegNet + bgsub + deltas
+# -------------------------------------------- 6. RegNet (no bg-subtract) + deltas
 echo ""
-echo ">>> 6/9 RegNet + bgsub + deltas, combined DOC + AviaNZ"
+echo ">>> 6/9 RegNet (no bg-subtract) + deltas, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_DELTAS/training_history.json"
@@ -297,7 +303,6 @@ else
     --model-type regnet \
     --pretrained "$PRETRAINED_MODEL" \
     --spec-transform Log \
-    --bg-subtract \
     --deltas \
     --kbird-prior 2.0 \
     --epochs 40 --patience 15 --seed 0
@@ -317,7 +322,6 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_DELTAS" \
     --model-type regnet \
     --spec-transform Log \
-    --bg-subtract \
     --deltas \
     --kbird-prior 2.0 \
     --seed 0 \
@@ -325,9 +329,9 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   touch "$marker"
 done
 
-# --------------------------------------- 7. RegNet + bgsub + freeze-stages 2
+# --------------------------------------- 7. RegNet (no bg-subtract) + freeze-stages 2
 echo ""
-echo ">>> 7/9 RegNet + bgsub + freeze-stages 2, combined DOC + AviaNZ"
+echo ">>> 7/9 RegNet (no bg-subtract) + freeze-stages 2, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_FREEZE/training_history.json"
@@ -338,7 +342,6 @@ else
     --model-type regnet \
     --pretrained "$PRETRAINED_MODEL" \
     --spec-transform Log \
-    --bg-subtract \
     --freeze-stages 2 \
     --kbird-prior 2.0 \
     --epochs 40 --patience 15 --seed 0
@@ -358,7 +361,6 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FREEZE" \
     --model-type regnet \
     --spec-transform Log \
-    --bg-subtract \
     --freeze-stages 2 \
     --kbird-prior 2.0 \
     --seed 0 \
@@ -366,9 +368,9 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   touch "$marker"
 done
 
-# ----------------------------------------------- 8. RegNet + bgsub + noise-mixing
+# ----------------------------------------------- 8. RegNet (no bg-subtract) + noise-mixing + reverb
 echo ""
-echo ">>> 8/9 RegNet + bgsub + noise-mixing (freefield wind/rain + AviaNZ background)"
+echo ">>> 8/9 RegNet (no bg-subtract) + noise-mixing + apply-reverb (freefield wind/rain + AviaNZ background)"
 
 if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
   echo "  WARNING: noise folder not found at $NOISE_FOLDER"
@@ -383,10 +385,10 @@ else
       --model-type regnet \
       --pretrained "$PRETRAINED_MODEL" \
       --spec-transform Log \
-      --bg-subtract \
       --kbird-prior 2.0 \
       --noise-folder "$NOISE_FOLDER" \
       --noise "$NOISE_RATIO" \
+      --apply-reverb \
       --epochs 40 --patience 15 --seed 0
   fi
 
@@ -404,17 +406,17 @@ else
     python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE" \
       --model-type regnet \
       --spec-transform Log \
-      --bg-subtract \
       --kbird-prior 2.0 \
+      --apply-reverb \
       --seed 0 \
       --eval-only --test-folder "$folder"
     touch "$marker"
   done
 fi
 
-# ----------------------------------------------- 9. RegNet + bgsub + background-prob 0.5
+# ----------------------------------------------- 9. RegNet (no bg-subtract) + background-prob 0.5
 echo ""
-echo ">>> 9/9 RegNet + bgsub + background-prob 0.5, combined DOC + AviaNZ"
+echo ">>> 9/9 RegNet (no bg-subtract) + background-prob 0.5, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_BGPROB/training_history.json"
@@ -425,7 +427,6 @@ else
     --model-type regnet \
     --pretrained "$PRETRAINED_MODEL" \
     --spec-transform Log \
-    --bg-subtract \
     --background-prob 0.5 \
     --kbird-prior 2.0 \
     --epochs 40 --patience 15 --seed 0
@@ -445,7 +446,6 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_BGPROB" \
     --model-type regnet \
     --spec-transform Log \
-    --bg-subtract \
     --background-prob 0.5 \
     --kbird-prior 2.0 \
     --seed 0 \
