@@ -1482,9 +1482,13 @@ class Trainer:
                     _nan_warned = True
                     n_nan = torch.isnan(output).sum().item()
                     finite = output[torch.isfinite(output)]
+                    if finite.numel() > 0:
+                        finite_range = f"[{finite.min().item():.3f}, {finite.max().item():.3f}]"
+                    else:
+                        finite_range = "n/a (no finite values)"
                     print(f"  ⚠️  NaN in model OUTPUT logits! "
                           f"nan_count={n_nan}/{output.numel()} "
-                          f"finite_range=[{finite.min().item():.3f}, {finite.max().item():.3f}]")
+                          f"finite_range={finite_range}")
                     print(f"     Input range: min={data.min().item():.3f} max={data.max().item():.3f}")
                     # Check per-layer BN running stats for obvious corruption
                     for name, mod in model.named_modules():
