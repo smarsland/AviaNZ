@@ -19,9 +19,15 @@ from .reverberator import apply_reverb
 
 def get_background_spectrogram(img):
     H, W = img.shape
+    # Guard against degenerate widths: W//2 == 0 makes bg_pixels empty, which
+    # turns mean/var into NaN (numpy "Mean of empty slice") and poisons every
+    # downstream value with NaN. Too narrow to estimate a background anyway.
+    if W < 2:
+        return img.copy()
+
     sorted_pixels = np.sort(img, axis=1)
     bg_pixels = sorted_pixels[:, :W//2]
-    
+
     mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
     var0 = np.var(bg_pixels, axis=1, keepdims=True)
 
@@ -30,7 +36,10 @@ def get_background_spectrogram(img):
     for row in range(H):
         outliers = sg_normalized[row, :] > 3
         not_outliers = sg_normalized[row, :] <= 3
-        sg_normalized[row, outliers] = np.random.choice(sg_normalized[row, not_outliers], size=np.sum(outliers), replace=True)
+        # If every pixel in the row is an "outlier" there's nothing to sample
+        # replacements from; np.random.choice on an empty array would raise.
+        if not_outliers.any():
+            sg_normalized[row, outliers] = np.random.choice(sg_normalized[row, not_outliers], size=np.sum(outliers), replace=True)
 
     sg_fixed = (sg_normalized * (np.sqrt(var0) + 1e-6)) + mu0
 
