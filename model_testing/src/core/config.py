@@ -3,7 +3,7 @@ Simple configuration settings for AviaNZ model training.
 Centralizes commonly used parameters to avoid magic numbers.
 """
 
-DEFAULT_SAMPLE_RATE = 8000
+DEFAULT_SAMPLE_RATE = 32000
 
 # if 32000 we have kaytoo-matched window: N_FFT=2048 @ 32kHz = 64ms -> freq resolution 15.6 Hz/bin
 # (was 25ms / 40 Hz/bin; 10ms hop retained for time resolution)

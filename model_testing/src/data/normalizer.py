@@ -8,14 +8,14 @@ from scipy.ndimage import median_filter as median_filter_func
 
 def get_background_spectrogram(img):
     # Assume for any frequency band no more than 10% of the pixels are interesting
-    # Therefore take the bottom 10% as non-interesting to estimate the background
+    # Therefore take the middle 80% as non-interesting to estimate the background
+    # Also correcting the bottom 10% to compensate for the top 10%...
     H, W = img.shape
     
     # Ensure we take at least 1 pixel for background estimation
-    n_bg_pixels = max(1, W // 10)
     
     sorted_pixels = np.sort(img, axis=1)
-    bg_pixels = sorted_pixels[:, :n_bg_pixels]
+    bg_pixels = sorted_pixels[:, max(1, (W * 1) // 10):max(1, (W * 9) // 10)]
     
     # Calculate mean and variance of background pixels per frequency band
     mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
@@ -25,17 +25,18 @@ def get_background_spectrogram(img):
     sg_normalized = (img - mu0) / (np.sqrt(var0) + 1e-6)
 
     for row in range(H):
-        outliers = sg_normalized[row, :] > 4
-        not_outliers = sg_normalized[row, :] <= 4
+        high_outliers = sg_normalized[row, :] > 4
+        low_outliers = sg_normalized[row, :] < -4
+        not_outliers = (sg_normalized[row, :] <= 4) & (sg_normalized[row, :] >= -4)
         
         # Handle case where all pixels are outliers
-        if np.all(outliers):
+        if np.all(high_outliers | low_outliers):
             # If all are outliers, use the original normalized values
             continue
         elif np.sum(not_outliers) > 0:
-            sg_normalized[row, outliers] = np.random.choice(
+            sg_normalized[row, high_outliers | low_outliers] = np.random.choice(
                 sg_normalized[row, not_outliers], 
-                size=np.sum(outliers), 
+                size=np.sum(high_outliers | low_outliers), 
                 replace=True
             )
 
