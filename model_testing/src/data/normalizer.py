@@ -26,7 +26,14 @@ def split_spectrogram_components(img, stochastic=True):
     # Sort each row to estimate background statistics from the bottom 10%
     sorted_indices = np.argsort(img, axis=1)
     p = 0.1
-    bg_indices_per_band = sorted_indices[:, :int(W * p)]
+    # Guard against the estimation window going empty: int(W*p) is 0 for W < 10,
+    # which makes np.mean/np.std over the empty slice return NaN and poison the
+    # entire reconstruction (the experiment-9-style NaN collapse). Use at least
+    # one column, and at least 2 for a meaningful std; for very short rows fall
+    # back to the whole row so stats are always defined.
+    n_bg = max(2, int(W * p))
+    n_bg = min(n_bg, W)
+    bg_indices_per_band = sorted_indices[:, :n_bg]
 
     bg_mean = np.mean(np.take_along_axis(img, bg_indices_per_band, axis=1), axis=1, keepdims=True)
     bg_std = np.std(np.take_along_axis(img, bg_indices_per_band, axis=1), axis=1, keepdims=True)
@@ -42,6 +49,16 @@ def split_spectrogram_components(img, stochastic=True):
     # Row-normalized image
     row_normalized_image = (img - true_mu) / (true_sigma + 1e-8)
     fg_mask = np.abs(row_normalized_image) > 3
+
+    # Final safety net: a degenerate row (e.g. all-identical values) can still yield a
+    # non-finite sigma. Replace any non-finite normalized values with 0 (background)
+    # so a single bad row/column can never inject NaN into the batch.
+    if not np.isfinite(row_normalized_image).all():
+        bad = ~np.isfinite(row_normalized_image)
+        row_normalized_image = np.where(bad, 0.0, row_normalized_image)
+        fg_mask = fg_mask & ~bad
+        true_mu = np.where(np.isfinite(true_mu), true_mu, 0.0)
+        true_sigma = np.where(np.isfinite(true_sigma) & (true_sigma > 0), true_sigma, 1.0)
 
     # Estimate normalized background by replacing foreground pixels with normal noise
     norm_bg = row_normalized_image.copy()
