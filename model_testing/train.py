@@ -99,6 +99,12 @@ Examples:
                        help="Probability of replacing a training sample with a synthetic "
                             "foreground-removed background version (labels zeroed) instead of "
                             "the original (default: 0.0 = disabled, try 0.5)")
+    parser.add_argument('--fg-bg-swap', action='store_true', dest='fg_bg_swap',
+                       help="Foreground/background swap augmentation: each batch is built from "
+                            "batch_size/4 samples, each expanded into the 4 background/foreground "
+                            "cross-combinations with a random partner (generate_spectrogram_combinations). "
+                            "Labels follow the FOREGROUND of each combination. At eval/test time the "
+                            "model input is a deterministic self bg+fg reconstruction (no cross-contamination).")
     parser.add_argument('--use-asl', action='store_true', dest='use_asl',
                        help="Use Asymmetric Loss (ASL) instead of BCE — clips easy-negative gradients, "
                             "reducing gradient suppression from all-background samples")

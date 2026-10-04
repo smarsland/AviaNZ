@@ -35,7 +35,7 @@ def _load_prediction_frames(prediction_csvs):
     return all_probs, all_trues
 
 
-def compute_combined_thresholds(model_dir: Path, prediction_csvs=None) -> pd.DataFrame:
+def compute_combined_thresholds(model_dir: Path, prediction_csvs=None, fixed_threshold=None) -> pd.DataFrame:
     if prediction_csvs is None:
         # Prefer predictions_val.csv (covers all training classes with ground truth)
         # over the matched test-split CSVs (only 9 classes have ground truth there).
@@ -67,6 +67,13 @@ def compute_combined_thresholds(model_dir: Path, prediction_csvs=None) -> pd.Dat
 
     n_classes = len(all_class_names)
     class_idx = {c: i for i, c in enumerate(all_class_names)}
+
+    if fixed_threshold is not None:
+        print(f"  Fixed threshold {fixed_threshold} requested — skipping optimisation.")
+        return pd.DataFrame({
+            "class": all_class_names,
+            "threshold": np.full(n_classes, fixed_threshold, dtype=np.float32),
+        })
 
     # ── 3. Build combined probability / ground-truth matrices ─────────────────
     total_samples = sum(len(p) for p in all_probs)
@@ -168,6 +175,9 @@ def main():
                         help="Optional prediction CSV to threshold using the computed thresholds")
     parser.add_argument("--apply-out", type=str, default=None,
                         help="Output path for the thresholded CSV. Defaults to <input>_thresholded.csv")
+    parser.add_argument("--fixed-threshold", type=float, default=None,
+                        help="Skip optimisation and set every class to this fixed "
+                             "threshold (e.g. 0.5).")
     args = parser.parse_args()
 
     model_dir = Path(args.model_dir)
@@ -176,7 +186,8 @@ def main():
 
     prediction_csvs = args.prediction_csvs or None
     print(f"Computing combined thresholds from: {model_dir}")
-    thresholds_df = compute_combined_thresholds(model_dir, prediction_csvs=prediction_csvs)
+    thresholds_df = compute_combined_thresholds(model_dir, prediction_csvs=prediction_csvs,
+                                                fixed_threshold=args.fixed_threshold)
 
     out_path = model_dir / "thresholds_combined.csv"
     thresholds_df.to_csv(out_path, index=False, float_format="%.4f")
@@ -186,10 +197,13 @@ def main():
         apply_thresholds_to_csv(args.apply_to, thresholds_df, out_path=args.apply_out)
 
     # Summary
-    tuned = thresholds_df[(thresholds_df["threshold"] != 0.5)]
-    print(f"  Classes with tuned thresholds (appeared in validation data): {len(tuned)}")
-    print(f"  Classes using default 0.5 threshold (no validation data):    "
-          f"{len(thresholds_df) - len(tuned)}")
+    if args.fixed_threshold is not None:
+        print(f"  All {len(thresholds_df)} classes set to fixed threshold {args.fixed_threshold}")
+    else:
+        tuned = thresholds_df[(thresholds_df["threshold"] != 0.5)]
+        print(f"  Classes with tuned thresholds (appeared in validation data): {len(tuned)}")
+        print(f"  Classes using default 0.5 threshold (no validation data):    "
+              f"{len(thresholds_df) - len(tuned)}")
 
 
 if __name__ == "__main__":

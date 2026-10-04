@@ -13,37 +13,17 @@ from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
 from scipy.stats import boxcox
 from scipy.ndimage import label
-from .normalizer import normalize_spectrogram
+from .normalizer import (
+    generate_spectrogram_combinations,
+    get_background_spectrogram,
+    normalize_spectrogram,
+    split_spectrogram_components,
+)
 from .reverberator import apply_reverb
 
-
-def get_background_spectrogram(img):
-    H, W = img.shape
-    # Guard against degenerate widths: W//2 == 0 makes bg_pixels empty, which
-    # turns mean/var into NaN (numpy "Mean of empty slice") and poisons every
-    # downstream value with NaN. Too narrow to estimate a background anyway.
-    if W < 2:
-        return img.copy()
-
-    sorted_pixels = np.sort(img, axis=1)
-    bg_pixels = sorted_pixels[:, :W//2]
-
-    mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
-    var0 = np.var(bg_pixels, axis=1, keepdims=True)
-
-    sg_normalized = (img - mu0) / (np.sqrt(var0) + 1e-6)
-
-    for row in range(H):
-        outliers = sg_normalized[row, :] > 3
-        not_outliers = sg_normalized[row, :] <= 3
-        # If every pixel in the row is an "outlier" there's nothing to sample
-        # replacements from; np.random.choice on an empty array would raise.
-        if not_outliers.any():
-            sg_normalized[row, outliers] = np.random.choice(sg_normalized[row, not_outliers], size=np.sum(outliers), replace=True)
-
-    sg_fixed = (sg_normalized * (np.sqrt(var0) + 1e-6)) + mu0
-
-    return sg_fixed
+# NOTE: get_background_spectrogram is implemented ONCE in normalizer.py and merely
+# re-exported here, because SpectrogramDataset's --background-prob path historically
+# resolves it from this module's namespace. There is intentionally no second copy.
 
 
 class DataLoader:
@@ -245,9 +225,9 @@ class SpectrogramDataset(Dataset):
     def __init__(self, filenames, labels, img_height, img_width, channels=1,
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, noise_max_gain=4.0,
                  spec_transform="Log", training=True, width_downsizing=None, bg_subtract=False,
-                 median_filter=False, apply_reverb=False, reverb_prob=0.5, reverb_decay_range=(0.15, 0.6),
+                 apply_reverb=False, reverb_prob=0.5, reverb_decay_range=(0.15, 0.6),
                  reverb_delay_range=(2, 40), reverb_threshold=2.5, use_temporal_roll=True, noise_mode='full',
-                 background_prob=0.0, ast_channel_dir=None, use_deltas=False):
+                 background_prob=0.0, ast_channel_dir=None, use_deltas=False, fg_bg_reconstruct=False):
         """
         Initialize SpectrogramDataset.
         
@@ -271,10 +251,19 @@ class SpectrogramDataset(Dataset):
             reverb_decay_range: (min, max) reverb decay/gain, sampled uniformly per sample
             reverb_delay_range: (min, max) mean echo delay in spectrogram frames, sampled uniformly per sample
             reverb_threshold: Z-score above which a time-frequency cell counts as "loud" and reverberates
-            median_filter: Whether to apply temporal median filtering (independent)
             use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
             noise_mode: How to extract noise - 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
             background_prob: Probability of replacing sample with its background spectrogram (zeros labels)
+            fg_bg_reconstruct: Foreground/background cross-combination mode. Training:
+                __getitem__ returns a list of 4 RAW linear-power variants
+                [bgA+fgA, bgA+fgB, bgB+fgA, bgB+fgB] (B = a random partner sample),
+                and FgBgSwapCollate combines a batch_size/4 group into a full batch
+                with labels taken from the FOREGROUND of each combination.
+                Evaluation (training=False): __getitem__ reconstructs the single
+                spectrogram bg+fg of itself, deterministically (background mean fill
+                instead of resampled noise), with NO cross-contamination from other
+                samples. The reconstruction is not exact because the training-time
+                background estimate adds randomness; eval uses the mean background.
         
         Note: For time axis, uses RANDOM SAMPLING (samples from per-frequency distribution)
         instead of zero-padding or tiling to avoid creating distinguishable artifacts.
@@ -293,7 +282,6 @@ class SpectrogramDataset(Dataset):
         self.training = training
         self.width_downsizing = width_downsizing
         self.bg_subtract = bg_subtract
-        self.median_filter = median_filter
         self.apply_reverb = apply_reverb
         self.reverb_prob = reverb_prob
         self.reverb_decay_range = reverb_decay_range
@@ -302,6 +290,7 @@ class SpectrogramDataset(Dataset):
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
         self.noise_mode = noise_mode
         self.background_prob = background_prob if training else 0.0
+        self.fg_bg_reconstruct = fg_bg_reconstruct
         self.ast_channel_dir = ast_channel_dir
         self.use_deltas = use_deltas
         self.rng = np.random.RandomState(21390)
@@ -338,14 +327,18 @@ class SpectrogramDataset(Dataset):
             print(f"Width downsampling: stride={width_downsizing} ({img_width} -> {final_width})")
         if self.bg_subtract:
             print(f"Background subtraction: enabled")
-        if self.median_filter:
-            print(f"Median filtering: enabled")
         if self.apply_reverb:
             print(f"Reverberation augmentation: enabled (prob={self.reverb_prob}, "
                   f"decay={self.reverb_decay_range}, delay={self.reverb_delay_range} frames, "
                   f"threshold={self.reverb_threshold}sigma)")
         if self.background_prob > 0:
             print(f"⚡ Background replacement: {self.background_prob*100:.1f}% of samples replaced with background (labels zeroed)")
+        if self.fg_bg_reconstruct:
+            if self.training:
+                print(f"⚡ FG/BG swap: each batch built from batch_size/4 samples x 4 bg/fg combinations "
+                      f"(labels follow the FOREGROUND of each combination)")
+            else:
+                print(f"⚡ FG/BG reconstruct: deterministic self bg+fg reconstruction (eval, no cross-contamination)")
         print("Time-axis padding: random sampling from existing row values")
         print(f"Final image size: {img_height}x{final_width}")
         print(f"AST patches (16x16): {height_patches}x{width_patches} = {total_patches} total patches")
@@ -375,6 +368,36 @@ class SpectrogramDataset(Dataset):
         while data.ndim > 2:
             data = np.squeeze(data)
         assert data.ndim == 2, f"Data should be 2D after squeeze, got {data.shape}"
+
+        # FG/BG combination mode
+        if self.fg_bg_reconstruct:
+            if self.training:
+                # Return 4 raw linear-power bg/fg variants for this sample:
+                # [bgA+fgA, bgA+fgB, bgB+fgA, bgB+fgB] where B is a random partner
+                # (no self-partner). The collate (FgBgSwapCollate) combines a
+                # batch_size/4 group of these into a full batch, with labels taken
+                # from the FOREGROUND of each combination. Return raw (pre-log,
+                # pre-padding) variants because the partner differs per call and
+                # combination widths vary; the collate runs the shared pipeline.
+                partner_idx = idx
+                if len(self.filenames) > 1:
+                    while partner_idx == idx:
+                        partner_idx = int(self.rng.randint(0, len(self.filenames)))
+                partner = np.load(self.filenames[partner_idx])
+                while partner.ndim > 2:
+                    partner = np.squeeze(partner)
+                combos = generate_spectrogram_combinations(data, partner)
+                return ([np.asarray(c, dtype=np.float32) for c in combos], idx, partner_idx)
+            else:
+                # Evaluation: deterministic self-reconstruction (bg+fg of the SAME
+                # spectrogram, background mean fill instead of resampled noise), no
+                # cross-contamination from other samples.
+                comp = split_spectrogram_components(data, stochastic=False)
+                combined = comp['norm_bg'].copy()
+                combined[comp['fg_mask']] += comp['fg_diff'][comp['fg_mask']]
+                data = combined * (comp['true_sigma'] + 1e-8) + comp['true_mu']
+                data = np.clip(data, 0, None).astype(np.float32)
+                # fall through to the normal transform/padding pipeline below
         
         # Background replacement augmentation: replace with background spectrogram and zero labels
         replace_with_background = False
@@ -404,14 +427,14 @@ class SpectrogramDataset(Dataset):
         # meaningful non-zero level.  After min-max normalization the background is
         # already mapped to 0, making bg_subtract a no-op.
         # For all other transforms, bg_subtract runs after the transform as before.
-        if self.spec_transform == "LogMinMax" and (self.bg_subtract or self.median_filter):
+        if self.spec_transform == "LogMinMax" and self.bg_subtract:
             data = self.apply_spec_transform_log_only(data)
-            data = normalize_spectrogram(data, median_filter=self.median_filter, bg_subtract=self.bg_subtract)
+            data = normalize_spectrogram(data)
             data = self.apply_spec_transform_minmax_only(data)
         else:
             data = self.apply_spec_transform(data)
-            if self.bg_subtract or self.median_filter:
-                data = normalize_spectrogram(data, median_filter=self.median_filter, bg_subtract=self.bg_subtract)
+            if self.bg_subtract:
+                data = normalize_spectrogram(data)
 
         # Pad to fixed size by sampling from existing values (per row/column), then add channel dim.
         x = self.apply_padding_and_add_channels(data)
@@ -481,6 +504,72 @@ class SpectrogramDataset(Dataset):
             y = torch.zeros_like(y)
         
         return x, y
+
+    def _process_loaded_raw(self, data):
+        """The post-load transform pipeline shared by __getitem__ and FgBgSwapCollate:
+        spec transform (+ optional bg_subtract) -> pad/add channels -> temporal roll ->
+        crop -> width downsample -> SpecAugment -> delta channels -> AST attention
+        channel -> (C,H,W) tensor.
+
+        Args:
+            data: 2D raw linear-power spectrogram (H, W), already loaded/squeezed.
+        Returns:
+            (x, shift_amount): x is a (C, H, W) float tensor; shift_amount is the
+            temporal roll applied (0 when temporal roll is disabled / not training).
+        """
+        # Apply spectrogram transformation on the 2D raw data, before padding.
+        # For LogMinMax, background subtraction must happen between the log step and
+        # the min-max step: bg_subtract needs log-domain data where background has a
+        # meaningful non-zero level.  After min-max normalization the background is
+        # already mapped to 0, making bg_subtract a no-op.
+        # For all other transforms, bg_subtract runs after the transform as before.
+        if self.spec_transform == "LogMinMax" and self.bg_subtract:
+            data = self.apply_spec_transform_log_only(data)
+            data = normalize_spectrogram(data)
+            data = self.apply_spec_transform_minmax_only(data)
+        else:
+            data = self.apply_spec_transform(data)
+            if self.bg_subtract:
+                data = normalize_spectrogram(data)
+
+        # Pad to fixed size by sampling from existing values (per row/column), then add channel dim.
+        x = self.apply_padding_and_add_channels(data)
+        assert x.ndim == 3, f"After padding should be 3D (H,W,C), got {x.shape}"
+
+        # Apply temporal roll (random circular shift along time axis) during training
+        # shift_amount is tracked so the AST attention channel can be rolled identically.
+        shift_amount = 0
+        if self.use_temporal_roll and self.training:
+            shift_amount = self.rng.randint(0, x.shape[1])
+            x = np.roll(x, shift_amount, axis=1)
+
+        x = self.apply_crop(x)
+        assert x.ndim == 3, f"After crop should be 3D (H,W,C), got {x.shape}"
+
+        # Apply width downsampling if specified
+        if self.width_downsizing and self.width_downsizing > 1:
+            x = x[:, ::self.width_downsizing, :]
+            assert x.ndim == 3, f"After downsampling should be 3D (H,W,C), got {x.shape}"
+
+        # SpecAugment (time/frequency masking) during training
+        if self.training:
+            x = self.apply_specaugment(x)
+            assert x.ndim == 3, f"After specaugment should be 3D (H,W,C), got {x.shape}"
+
+        # Delta channels: replace single-channel spectrogram with [spec, \u0394, \u0394\u0394].
+        # Deltas are computed on the log-transformed spectrogram (after all augmentation)
+        # along the time axis, encoding rate-of-change rather than absolute magnitude.
+        # This improves robustness to microphone response and recording-level differences.
+        if self.use_deltas:
+            spec_2d = x[:, :, 0]  # (H, W)
+            delta = self._compute_delta(spec_2d)
+            delta2 = self._compute_delta(delta)
+            x = np.stack([spec_2d, delta, delta2], axis=-1)  # (H, W, 3)
+
+        # Convert to tensor and ensure correct format: (C, H, W)
+        x = torch.FloatTensor(x).permute(2, 0, 1)  # (H, W, C) -> (C, H, W)
+        assert x.ndim == 3, f"After permute should be 3D (C,H,W), got {x.shape}"
+        return x, shift_amount
 
     def apply_spec_transform_log_only(self, sg):
         """First half of LogMinMax: log + top_db clamp, without the min-max step."""
@@ -911,12 +1000,12 @@ def sparse_collate_fn(batch):
 def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        cropping_mode="center", noise_ratio=0.3, noise_max_gain=4.0, spec_transform=None,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
-                       use_class_balancing=False, bg_subtract=False, apply_reverb=False, median_filter=False,
+                       use_class_balancing=False, bg_subtract=False, apply_reverb=False,
                        reverb_prob=0.5, reverb_decay_range=(0.15, 0.6), reverb_delay_range=(2, 40),
                        reverb_threshold=2.5,
                        use_temporal_roll=True,
                        mixup_mode='mixup', noise_mode='full', background_prob=0.0,
-                       ast_channel_dir=None, use_deltas=False):
+                       ast_channel_dir=None, use_deltas=False, fg_bg_reconstruct=False):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -935,11 +1024,13 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         use_class_balancing: If True, balance classes using WeightedRandomSampler
         bg_subtract: If True, apply background subtraction to spectrograms
         apply_reverb: If True, apply reverberation augmentation to spectrograms
-        median_filter: If True, apply temporal median filtering to spectrograms
         use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
         mixup_mode: Augmentation mode when mixup_alpha > 0: 'mixup', 'cutmix', or 'both' (default: 'mixup')
         noise_mode: Noise extraction mode: 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
         background_prob: Probability of replacing sample with background spectrogram and zeroing labels
+        fg_bg_reconstruct: If True, each training batch is built from batch_size/4
+            samples, each expanded into 4 bg/fg combinations (labels follow the
+            foreground). Validation/eval uses deterministic self-reconstruction.
     
     Returns:
         tuple: (train_loader, val_loader)
@@ -966,12 +1057,12 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         reverb_decay_range=reverb_decay_range,
         reverb_delay_range=reverb_delay_range,
         reverb_threshold=reverb_threshold,
-        median_filter=median_filter,
         use_temporal_roll=use_temporal_roll,
         noise_mode=noise_mode,
         background_prob=background_prob,
         ast_channel_dir=ast_channel_dir,
         use_deltas=use_deltas,
+        fg_bg_reconstruct=fg_bg_reconstruct,
     )
 
     # Only create validation dataset if validation data exists
@@ -986,12 +1077,12 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             width_downsizing=width_downsizing,
             bg_subtract=bg_subtract,
             apply_reverb=False,
-            median_filter=median_filter,
             use_temporal_roll=False,  # Never roll validation data
             noise_mode='full',  # Not used (no noise in validation)
             background_prob=0.0,  # No background replacement for validation
             ast_channel_dir=ast_channel_dir,
             use_deltas=use_deltas,
+            fg_bg_reconstruct=fg_bg_reconstruct,  # eval: deterministic self-reconstruction
         )
     else:
         val_dataset = None
@@ -1041,7 +1132,14 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
     
     # Create data loaders
     # Determine collate function based on mode
-    if mixup_alpha > 0:
+    if fg_bg_reconstruct:
+        if mixup_alpha > 0:
+            print(f"WARNING: --fg-bg-swap overrides mixup (mixup disabled); "
+                  f"batches are built from 4 bg/fg combinations instead")
+        print(f"FG/BG swap collate: batch of {batch_size} = {batch_size // 4} samples x 4 combinations")
+        train_collate_fn = FgBgSwapCollate(train_dataset)
+        val_collate_fn = None
+    elif mixup_alpha > 0:
         # Standard mode with mixup/cutmix
         if mixup_mode == 'mixup':
             print(f"Mixup enabled with alpha={mixup_alpha}")
@@ -1060,9 +1158,17 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         train_collate_fn = None
         val_collate_fn = None
     
+    if fg_bg_reconstruct:
+        # The collate combines batch_size/4 quarter-samples into a full batch, so
+        # the loader must draw batch_size/4 raw items per batch to end up with
+        # batch_size combined samples.
+        train_batch_size = max(1, batch_size // 4)
+    else:
+        train_batch_size = batch_size
+
     train_loader = TorchDataLoader(
-        train_dataset, 
-        batch_size=batch_size, 
+        train_dataset,
+        batch_size=train_batch_size,
         shuffle=shuffle_train,
         sampler=sampler,
         num_workers=num_workers,
@@ -1084,6 +1190,36 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         val_loader = None
     
     return train_loader, val_loader
+
+
+class FgBgSwapCollate:
+    """Collate that expands batch_size/4 quarter-samples into a full batch via the
+    4 background/foreground cross-combinations of each sample with a random partner.
+
+    Each dataset item (fg_bg_reconstruct=True, training) is ([4 raw 2D variants],
+    idx, partner_idx), with variants in generate_spectrogram_combinations order:
+        variant 0: bg A + fg A   (A = this sample)      -> label of A
+        variant 1: bg A + fg B   (B = random partner)   -> label of B
+        variant 2: bg B + fg A                           -> label of A
+        variant 3: bg B + fg B                           -> label of B
+    LABELS FOLLOW THE FOREGROUND: variants 0/2 carry this sample's label,
+    variants 1/3 carry the partner's label.
+    """
+
+    def __init__(self, dataset):
+        self.dataset = dataset
+
+    def __call__(self, batch):
+        xs, ys = [], []
+        for variants, idx, partner_idx in batch:
+            for raw in variants:
+                x, _shift = self.dataset._process_loaded_raw(np.asarray(raw, dtype=np.float32))
+                xs.append(x)
+            own = self.dataset.labels[idx]
+            partner = self.dataset.labels[partner_idx]
+            # variants 0 and 2 use this sample's label; 1 and 3 use the partner's.
+            ys.extend([own, partner, own, partner])
+        return torch.stack(xs), torch.stack(ys)
 
 
 class MixupCollate:

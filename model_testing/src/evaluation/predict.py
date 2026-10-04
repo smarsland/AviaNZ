@@ -245,10 +245,12 @@ class ModelPredictor:
         
         # Read preprocessing config
         bg_subtract = model_config.get('bg_subtract', False)
-        median_filter = model_config.get('median_filter', False)
+        fg_bg_swap = model_config.get('fg_bg_swap', False)
         
         print(f"Using spec_transform: {spec_transform} (from model config)")
-        print(f"Using bg_subtract: {bg_subtract}, median_filter: {median_filter}")
+        print(f"Using bg_subtract: {bg_subtract}")
+        if fg_bg_swap:
+            print("Using fg_bg_swap: deterministic self bg+fg reconstruction (no cross-contamination)")
         
         # Create SpectrogramDataset (EXACTLY matching validation in create_data_loaders)
         img_height = self.expected_freq_bins
@@ -267,10 +269,10 @@ class ModelPredictor:
             training=False,
             width_downsizing=None,
             bg_subtract=bg_subtract,
-            median_filter=median_filter,
             use_temporal_roll=False,
             noise_mode='full',
-            background_prob=0.0
+            background_prob=0.0,
+            fg_bg_reconstruct=fg_bg_swap
         )
         
         # Create DataLoader (same as validation)

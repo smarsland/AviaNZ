@@ -61,7 +61,6 @@ class AugmentationConfig:
     reverb_decay_range: tuple = (0.15, 0.6)  # (min, max) reverb decay/gain, sampled per sample
     reverb_delay_range: tuple = (2, 40)  # (min, max) mean echo delay in spectrogram frames
     reverb_threshold: float = 2.5  # Z-score above which a cell counts as "loud" and reverberates
-    median_filter: bool = False  # Temporal median filtering (independent)
     no_background: bool = False  # Drop all-zero (background) training samples
     use_deltas: bool = False  # Add delta + delta-delta channels (3-ch input; encodes rate-of-change)
     per_chunk_norm: bool = False
@@ -70,6 +69,7 @@ class AugmentationConfig:
     noise_mode: str = 'full'
     validation_split: float = 0.2
     background_prob: float = 0.0
+    fg_bg_swap: bool = False  # Build each batch from batch_size/4 samples x 4 bg/fg combinations (labels follow foreground)
 
 
 @dataclass
@@ -164,7 +164,6 @@ class TrainerConfig:
                 reverb_decay_range=tuple(getattr(args, 'reverb_decay_range', (0.15, 0.6))),
                 reverb_delay_range=tuple(getattr(args, 'reverb_delay_range', (2, 40))),
                 reverb_threshold=getattr(args, 'reverb_threshold', 2.5),
-                median_filter=getattr(args, 'median_filter', False),
                 no_background=getattr(args, 'no_background', False),
                 use_deltas=getattr(args, 'use_deltas', False),
                 per_chunk_norm=getattr(args, 'per_chunk_norm', False),
@@ -172,7 +171,8 @@ class TrainerConfig:
                 mixup_mode=getattr(args, 'mixup_mode', 'mixup'),
                 noise_mode=getattr(args, 'noise_mode', 'full'),
                 validation_split=getattr(args, 'validation_split', 0.2),
-                background_prob=getattr(args, 'background_prob', 0.0)
+                background_prob=getattr(args, 'background_prob', 0.0),
+                fg_bg_swap=getattr(args, 'fg_bg_swap', False)
             ),
             loss=LossConfig(
                 use_class_weights=getattr(args, 'class_weights', False),

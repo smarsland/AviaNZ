@@ -411,9 +411,12 @@ def evaluate(test_df, thresholds, canonical_gt=None):
 # Run conditions
 # ---------------------------------------------------------------------------
 
-def run_conditions(model_data, conditions, all_classes):
+def run_conditions(model_data, conditions, all_classes, fixed_threshold=None):
     """
     Compute all three metrics for every (condition, model) combination.
+
+    fixed_threshold: when set, skip threshold tuning and use this value for
+    every class.
 
     Returns:
         results[condition_index][model_name] = {
@@ -480,7 +483,14 @@ def run_conditions(model_data, conditions, all_classes):
                     *(canonical_gts.get(s, set()) for s in test_split)
                 )
 
-            thresholds = compute_thresholds(src_df)
+            if fixed_threshold is not None:
+                thresholds = {
+                    cls: fixed_threshold
+                    for cls in list(src_df.columns) + list(test_df.columns)
+                    if not cls.startswith("true_")
+                }
+            else:
+                thresholds = compute_thresholds(src_df)
             metrics = evaluate(
                 test_df,
                 thresholds,
@@ -617,6 +627,9 @@ def main():
                         help="Path to model_tests/ directory (auto-detected if omitted).")
     parser.add_argument("--out", default="results_figure.png",
                         help="Output figure filename (default: results_figure.png).")
+    parser.add_argument("--fixed-threshold", type=float, default=None,
+                        help="Skip per-class threshold tuning and evaluate every "
+                             "class at this fixed threshold (e.g. 0.5).")
     args = parser.parse_args()
 
     if args.model_tests:
@@ -706,10 +719,14 @@ def main():
 
     print("\n=== Computing all metrics ===\n")
 
+    if args.fixed_threshold is not None:
+        print(f"Using fixed threshold {args.fixed_threshold} for all classes (no tuning)\n")
+
     results = run_conditions(
         model_data,
         CONDITIONS,
-        all_classes
+        all_classes,
+        fixed_threshold=args.fixed_threshold
     )
 
     # -------------------------------------------------------- print tables

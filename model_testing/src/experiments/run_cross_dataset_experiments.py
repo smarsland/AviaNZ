@@ -589,8 +589,6 @@ def run_experiment(config_dict):
         
         if config_dict.get('bg_subtract'):
             cmd.append('--bg-subtract')
-        if config_dict.get('median_filter'):
-            cmd.append('--median-filter')
         if config_dict.get('noise', 0) > 0:
             cmd.extend(['--noise', str(config_dict['noise'])])
             if config_dict.get('noise_folder'):
@@ -620,8 +618,6 @@ def run_experiment(config_dict):
         
         if config_dict.get('bg_subtract'):
             cmd.append('--bg-subtract')
-        if config_dict.get('median_filter'):
-            cmd.append('--median-filter')
         if config_dict.get('seed'):
             cmd.extend(['--seed', str(config_dict['seed'])])
     
@@ -902,12 +898,12 @@ def main():
     print("="*70 + "\n")
     
     normalization_configs = [
-        {'name': 'Log', 'spec_transform': 'Log', 'bg_subtract': False, 'median_filter': False},
-        {'name': 'Log+median+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True, 'median_filter': True},
-        {'name': 'Log+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True, 'median_filter': False},
-        {'name': 'Log+median', 'spec_transform': 'Log', 'bg_subtract': False, 'median_filter': True},
-        {'name': 'PCEN', 'spec_transform': 'PCEN', 'bg_subtract': False, 'median_filter': False},
-        {'name': 'Box-Cox', 'spec_transform': 'Box-Cox', 'bg_subtract': False, 'median_filter': False},
+        {'name': 'Log', 'spec_transform': 'Log', 'bg_subtract': False},
+        {'name': 'Log+median+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True},
+        {'name': 'Log+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True},
+        {'name': 'Log+median', 'spec_transform': 'Log', 'bg_subtract': False},
+        {'name': 'PCEN', 'spec_transform': 'PCEN', 'bg_subtract': False},
+        {'name': 'Box-Cox', 'spec_transform': 'Box-Cox', 'bg_subtract': False},
     ]
     
     for seed in args.seeds:
@@ -961,8 +957,8 @@ def main():
     print("="*70 + "\n")
     
     dann_configs = [
-        {'name': 'Log', 'bg_subtract': False, 'median_filter': False},
-        {'name': 'Log+median+bg_subtract', 'bg_subtract': True, 'median_filter': True},
+        {'name': 'Log', 'bg_subtract': False},
+        {'name': 'Log+median+bg_subtract', 'bg_subtract': True},
     ]
     
     for seed in args.seeds:
@@ -982,7 +978,6 @@ def main():
                 'mixup': args.mixup,
                 'spec_transform': 'Log',
                 'bg_subtract': dann_config['bg_subtract'],
-                'median_filter': dann_config['median_filter'],
                 'lambda_domain': 0.3,
                 'seed': seed,
             })
@@ -1002,7 +997,6 @@ def main():
                 'mixup': args.mixup,
                 'spec_transform': 'Log',
                 'bg_subtract': dann_config['bg_subtract'],
-                'median_filter': dann_config['median_filter'],
                 'lambda_domain': 0.3,
                 'seed': seed,
             })
@@ -1039,7 +1033,6 @@ def main():
                     'mixup': args.mixup,
                     'spec_transform': 'Log',
                     'bg_subtract': False,
-                    'median_filter': False,
                     'noise': noise_level,
                     'noise_folder': args.noise_folder,
                     'seed': seed,
@@ -1059,7 +1052,6 @@ def main():
                     'mixup': args.mixup,
                     'spec_transform': 'Log',
                     'bg_subtract': False,
-                    'median_filter': False,
                     'noise': noise_level,
                     'noise_folder': args.noise_folder,
                     'seed': seed,
@@ -1137,7 +1129,6 @@ def main():
                         'mixup': args.mixup,
                         'spec_transform': 'Log',
                         'bg_subtract': False,
-                        'median_filter': False,
                         'noise': 0.2,  # Fixed ratio
                         'noise_folder': str(noise_subset_dir),
                         'seed': seed,
@@ -1157,7 +1148,6 @@ def main():
                         'mixup': args.mixup,
                         'spec_transform': 'Log',
                         'bg_subtract': False,
-                        'median_filter': False,
                         'noise': 0.2,  # Fixed ratio
                         'noise_folder': str(noise_subset_dir),
                         'seed': seed,
@@ -1224,8 +1214,8 @@ def main():
         print("="*70 + "\n")
         
         merged_configs = [
-            {'name': 'Log', 'spec_transform': 'Log', 'bg_subtract': False, 'median_filter': False},
-            {'name': 'Log+median+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True, 'median_filter': True},
+            {'name': 'Log', 'spec_transform': 'Log', 'bg_subtract': False},
+            {'name': 'Log+median+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True},
         ]
         
         for seed in args.seeds:

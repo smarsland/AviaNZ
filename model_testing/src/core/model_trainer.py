@@ -284,7 +284,6 @@ class Trainer:
         self.reverb_decay_range = getattr(cfg.augmentation, 'reverb_decay_range', (0.15, 0.6))
         self.reverb_delay_range = getattr(cfg.augmentation, 'reverb_delay_range', (2, 40))
         self.reverb_threshold = getattr(cfg.augmentation, 'reverb_threshold', 2.5)
-        self.median_filter = cfg.augmentation.median_filter
         self.no_background = getattr(cfg.augmentation, 'no_background', False)
         self.use_deltas = getattr(cfg.augmentation, 'use_deltas', False)
         self.per_chunk_norm = cfg.augmentation.per_chunk_norm
@@ -292,6 +291,7 @@ class Trainer:
         self.mixup_mode = cfg.augmentation.mixup_mode
         self.noise_mode = cfg.augmentation.noise_mode
         self.background_prob = cfg.augmentation.background_prob
+        self.fg_bg_swap = getattr(cfg.augmentation, 'fg_bg_swap', False)
         
         # Loss configuration
         self.use_class_weights = cfg.loss.use_class_weights
@@ -468,13 +468,13 @@ class Trainer:
             use_class_balancing=False, bg_subtract=self.bg_subtract, apply_reverb=self.apply_reverb,
             reverb_prob=self.reverb_prob, reverb_decay_range=self.reverb_decay_range,
             reverb_delay_range=self.reverb_delay_range, reverb_threshold=self.reverb_threshold,
-            median_filter=self.median_filter,
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,
             noise_mode=self.noise_mode,
             background_prob=self.background_prob,
             ast_channel_dir=self.ast_channel_dir,
             use_deltas=self.use_deltas,
+            fg_bg_reconstruct=self.fg_bg_swap,
         )
         
         # Create target domain data loader for DANN
@@ -485,7 +485,6 @@ class Trainer:
                 spec_transform=self.spec_transform,
                 num_workers=num_workers, width_downsizing=None, mixup_alpha=0.0,  # No mixup for target
                 use_class_balancing=False, bg_subtract=self.bg_subtract, apply_reverb=self.apply_reverb,
-                median_filter=self.median_filter,
                 use_temporal_roll=self.use_temporal_roll,
                 mixup_mode='mixup',
                 noise_mode='full',
@@ -1262,9 +1261,10 @@ class Trainer:
             self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
             noise_filenames=None, noise_ratio=0.0, spec_transform=self.spec_transform,
             training=False, width_downsizing=None, bg_subtract=self.bg_subtract, apply_reverb=False,
-            median_filter=self.median_filter, use_temporal_roll=False,
+            use_temporal_roll=False,
             noise_mode='full', background_prob=0.0,
             ast_channel_dir=self.ast_channel_dir, use_deltas=self.use_deltas,
+            fg_bg_reconstruct=self.fg_bg_swap,
         )
         test_loader_obj1 = torch.utils.data.DataLoader(
             test_dataset1, batch_size=self.batch_size, shuffle=False,
@@ -1289,9 +1289,10 @@ class Trainer:
             self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
             noise_filenames=None, noise_ratio=0.0, spec_transform=self.spec_transform,
             training=False, width_downsizing=None, bg_subtract=self.bg_subtract, apply_reverb=False,
-            median_filter=self.median_filter, use_temporal_roll=False,
+            use_temporal_roll=False,
             noise_mode='full', background_prob=0.0,
             ast_channel_dir=self.ast_channel_dir, use_deltas=self.use_deltas,
+            fg_bg_reconstruct=self.fg_bg_swap,
         )
         val_loader_obj = torch.utils.data.DataLoader(
             val_dataset, batch_size=self.batch_size, shuffle=False,
@@ -1396,7 +1397,7 @@ class Trainer:
         model_config['spec_transform'] = self.spec_transform
         model_config['bg_subtract'] = self.bg_subtract
         model_config['apply_reverb'] = self.apply_reverb
-        model_config['median_filter'] = self.median_filter
+        model_config['fg_bg_swap'] = self.fg_bg_swap
         
         # Save to JSON
         config_path = os.path.join(self.output_folder, f'{self.model_type}_model_config.json')

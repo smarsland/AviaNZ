@@ -2,9 +2,10 @@
 """Compare DOC, AviaNZ, and long-recording spectrograms before/after foreground removal.
 
 This visualizes the exact transform used by train.py's --background-prob augmentation
-(model_trainer.py -> data_utils.SpectrogramDataset -> get_background_spectrogram()):
-per frequency row, the loudest (>3 sigma) pixels - the actual calls - are replaced with
-resampled background pixels from that same row, leaving only the ambient noise floor.
+(model_trainer.py -> data_utils.SpectrogramDataset -> normalizer.get_background_spectrogram()):
+per frequency row the background is estimated from the middle 80% of pixels, and any
+pixel more than 4 sigma from it - the actual calls - is replaced with resampled
+background pixels from that same row, leaving only the ambient noise floor.
 That is a DIFFERENT transform from --bg-subtract (normalizer.normalize_spectrogram),
 which rescales the whole spectrogram but keeps the call energy; see
 compare_audio_test_spectrograms.py for that one.
@@ -13,8 +14,9 @@ This does not reimplement any preprocessing math. It calls the exact same code t
 dataset builders, trainer, and background-prob augmentation use:
   1. SpectrogramProcessor.process_audio_segment() + save_spectrogram() - identical to
      build_matched_datasets.py / build_large_datasets.py (raw .npy on disk).
-  2. get_background_spectrogram() from src/data/data_utils.py - the literal function
-     model_trainer.py's --background-prob path calls to remove the foreground.
+  2. get_background_spectrogram() from src/data/normalizer.py - the single canonical
+     implementation; model_trainer.py's --background-prob path calls it (re-exported
+     through data_utils) to remove the foreground.
   3. SpectrogramDataset.__getitem__() from src/data/data_utils.py - the literal class
      model_trainer.py uses to load training/eval data (log transform, padding,
      orientation - all untouched, none of it reimplemented here).
@@ -39,7 +41,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from model_testing.src.core import config
-from model_testing.src.data.data_utils import SpectrogramDataset, get_background_spectrogram
+from model_testing.src.data.data_utils import SpectrogramDataset
+from model_testing.src.data.normalizer import get_background_spectrogram
 from model_testing.src.data.spectrogram_utils import SpectrogramProcessor
 
 
@@ -99,7 +102,9 @@ def process_for_model(processor, path, start_seconds, duration_seconds, time_bin
 
     # Foreground removal happens on the raw linear-power spectrogram, before any log
     # transform - exactly where data_utils.py's --background-prob path applies it.
-    sg_bg_only = get_background_spectrogram(sg_raw)
+    # get_background_spectrogram MUTATES its input in place, so hand it a copy -
+    # otherwise sg_raw is rewritten too and the "original" panel shows the transform.
+    sg_bg_only = get_background_spectrogram(sg_raw.copy())
 
     original = _log_transform_display(sg_raw, time_bins, tmp_dir, "sample_orig", processor)
     removed = _log_transform_display(sg_bg_only, time_bins, tmp_dir, "sample_bg", processor)
