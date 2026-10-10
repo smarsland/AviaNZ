@@ -78,7 +78,10 @@ Examples:
     parser.add_argument('--bg-subtract', action='store_true',
                        help="Apply background subtraction normalization (works independently)")
     parser.add_argument('--apply-reverb', action='store_true',
-                       help="Apply reverberation to loud noises")
+                       help="Apply reverberation to loud noises. With --fg-bg-swap the reverb is "
+                            "applied to the FOREGROUND component of each combination before it is "
+                            "placed on a background (echo tail trails onto the background); "
+                            "--reverb-threshold is unused in that mode since the foreground mask is exact")
     parser.add_argument('--reverb-prob', type=float, default=0.5,
                        help="Probability of applying reverb to a given training sample (default: 0.5)")
     parser.add_argument('--reverb-decay-range', type=float, nargs=2, default=(0.15, 0.6), metavar=('MIN', 'MAX'),

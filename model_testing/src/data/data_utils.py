@@ -19,7 +19,7 @@ from .normalizer import (
     normalize_spectrogram,
     split_spectrogram_components,
 )
-from .reverberator import apply_reverb
+from .reverberator import apply_reverb, apply_foreground_reverb
 
 # NOTE: get_background_spectrogram is implemented ONCE in normalizer.py and merely
 # re-exported here, because SpectrogramDataset's --background-prob path historically
@@ -386,7 +386,21 @@ class SpectrogramDataset(Dataset):
                 partner = np.load(self.filenames[partner_idx])
                 while partner.ndim > 2:
                     partner = np.squeeze(partner)
-                combos = generate_spectrogram_combinations(data, partner)
+                # Reverb (when --apply-reverb is on) is applied to the FOREGROUND
+                # component of each combination, before it is placed on a
+                # background, so the echo tail trails onto the (possibly partner)
+                # background. The whole-spectrogram reverb block below never runs
+                # in this mode (this branch returns early); reverb_threshold is
+                # unused here because the foreground mask is already exact.
+                reverb_fn = None
+                if self.apply_reverb and self.rng.rand() < self.reverb_prob:
+                    delay_min, delay_max = self.reverb_delay_range
+                    delay_mean = self.rng.randint(delay_min, delay_max + 1)
+                    delay_std = delay_mean * self.rng.uniform(0.5, 1.5)
+                    length = max(60, int(delay_max * 2))
+                    decay = self.rng.uniform(*self.reverb_decay_range)
+                    reverb_fn = lambda fg: apply_foreground_reverb(fg, delay_mean, delay_std, length, decay)
+                combos = generate_spectrogram_combinations(data, partner, reverb_fn=reverb_fn)
                 return ([np.asarray(c, dtype=np.float32) for c in combos], idx, partner_idx)
             else:
                 # Evaluation: deterministic self-reconstruction (bg+fg of the SAME

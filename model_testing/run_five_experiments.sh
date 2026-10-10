@@ -24,6 +24,10 @@ set -euo pipefail
 #      combinations); labels follow the FOREGROUND of each combination. At eval
 #      time the model sees a deterministic self bg+fg reconstruction (no
 #      cross-contamination). Trained on DOC + AviaNZ.
+#  11. RegNet (no bg-subtract) + kbird-prior 2 + fg/bg swap + reverb applied to
+#      the FOREGROUND component of each combination before it is placed on a
+#      background (echo tail trails onto the possibly-partner background),
+#      trained on DOC + AviaNZ.
 #
 # 6-9 build on the no-bg-subtract baseline (5), not bg-subtract (4): the
 # bg-subtract vs no-bg-subtract ablation showed no-bg-subtract wins decisively
@@ -90,6 +94,7 @@ OUT_REGNET_FREEZE="${OUT_ROOT}/regnet_combined_freeze2"
 OUT_REGNET_NOISE="${OUT_ROOT}/regnet_combined_noisemix_reverb"
 OUT_REGNET_BGPROB="${OUT_ROOT}/regnet_combined_bgprob50"
 OUT_REGNET_FGBG="${OUT_ROOT}/regnet_combined_fgbgswap"
+OUT_REGNET_FGBG_REVERB="${OUT_ROOT}/regnet_combined_fgbgswap_reverb"
 NOISE_FOLDER="${NOISE_FOLDER:-${BASE}/noise_dataset/noise_combined}"
 NOISE_RATIO="${NOISE_RATIO:-0.2}"
 
@@ -461,7 +466,7 @@ fi
 
 # ------------------------------------------------ 10. RegNet (no bg-subtract) + fg/bg swap
 echo ""
-echo ">>> 10/10 RegNet (no bg-subtract) + fg/bg swap (batch_size/4 x 4 combos, labels follow foreground)"
+echo ">>> 10/11 RegNet (no bg-subtract) + fg/bg swap (batch_size/4 x 4 combos, labels follow foreground)"
 
 # Training
 training_marker="$OUT_REGNET_FGBG/training_history.json"
@@ -493,6 +498,47 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
     --spec-transform Log \
     --kbird-prior 2.0 \
     --fg-bg-swap \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
+
+# ------------------------------------ 11. RegNet (no bg-subtract) + fg/bg swap + foreground reverb
+echo ""
+echo ">>> 11/11 RegNet (no bg-subtract) + fg/bg swap + reverb on foregrounds (echo trails onto partner bg)"
+
+# Training
+training_marker="$OUT_REGNET_FGBG_REVERB/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG_REVERB" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --apply-reverb \
+    --epochs 40 --patience 15 --seed 0
+fi
+
+# Evaluation (reverb is train-only; eval uses the deterministic self bg+fg reconstruction)
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_FGBG_REVERB/$dataset_key/done"
+
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
+
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG_REVERB" \
+    --model-type regnet \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --apply-reverb \
     --seed 0 \
     --eval-only --test-folder "$folder"
   touch "$marker"

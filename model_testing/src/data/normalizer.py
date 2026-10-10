@@ -6,7 +6,7 @@ Provides background normalization and foreground swapping for spectrograms to re
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.stats import norm
-
+from scipy.ndimage import label
 
 def split_spectrogram_components(img, stochastic=True):
     """
@@ -23,9 +23,9 @@ def split_spectrogram_components(img, stochastic=True):
     img = np.asarray(img, dtype=np.float32)
     H, W = img.shape
 
-    # Sort each row to estimate background statistics from the bottom 10%
+    # Sort each row to estimate background statistics from the bottom 50%
     sorted_indices = np.argsort(img, axis=1)
-    p = 0.1
+    p = 0.5
     # Guard against the estimation window going empty: int(W*p) is 0 for W < 10,
     # which makes np.mean/np.std over the empty slice return NaN and poison the
     # entire reconstruction (the experiment-9-style NaN collapse). Use at least
@@ -84,7 +84,7 @@ def split_spectrogram_components(img, stochastic=True):
     }
 
 
-def generate_spectrogram_combinations(img1, img2):
+def generate_spectrogram_combinations(img1, img2, reverb_fn=None):
     """
     Takes two spectrograms (A and B) and returns all 4 background/foreground
     cross-combinations:
@@ -100,6 +100,11 @@ def generate_spectrogram_combinations(img1, img2):
     diagonal reconstructions are exactly as wide as their source clip and tile
     that clip's own background an integral number of times (1x, i.e. no tiling).
     Heights (mel bins) must still match - they index the same frequency rows.
+
+    reverb_fn: optional callable applied to each foreground difference (normalized
+    space, zero outside the foreground mask) BEFORE it is added to a background -
+    e.g. apply_foreground_reverb, so the echo tail becomes part of the foreground
+    and trails past the mask onto the background it is placed on.
     """
     if img1.shape[0] != img2.shape[0]:
         raise ValueError(
@@ -120,8 +125,13 @@ def generate_spectrogram_combinations(img1, img2):
         # Start with the background's normalized base, tiled to the fg width.
         combined_norm = np.tile(bg_comp['norm_bg'], (1, reps))[:, :W_fg].copy()
 
-        # Add the target foreground where the foreground mask is active.
-        combined_norm[fg_comp['fg_mask']] += fg_comp['fg_diff'][fg_comp['fg_mask']]
+        # Add the target foreground. fg_diff is zero outside the foreground mask,
+        # so add it whole rather than via the mask: a reverb tail (if reverb_fn
+        # was applied) then extends past the mask onto the background.
+        fg_diff = fg_comp['fg_diff']
+        if reverb_fn is not None:
+            fg_diff = reverb_fn(fg_diff)
+        combined_norm += fg_diff
 
         # Reverse row normalization and clip. true_mu/true_sigma are (H, 1) column
         # vectors - constant across time - so they broadcast directly onto the
@@ -158,8 +168,10 @@ def get_background_spectrogram(img):
     if img.shape[1] < 2:
         return img
     comp = split_spectrogram_components(img)
-    bg = comp['norm_bg'] * (comp['true_sigma'] + 1e-8) + comp['true_mu']
-    return np.clip(bg, 0, None)
+    #bg = comp['norm_bg'] * (comp['true_sigma'] + 1e-8) + comp['true_mu']
+    #return np.clip(bg, 0, None)
+    fg = comp['fg_diff']# * (comp['true_sigma'] + 1e-8) + comp['true_mu']
+    return fg
 
 
 def swap_foregrounds(img1, img2):

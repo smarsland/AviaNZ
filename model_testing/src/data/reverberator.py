@@ -1,6 +1,16 @@
 import numpy as np
 from scipy.ndimage import maximum_filter1d
 
+def build_reverb_kernel(delay_mean=5, delay_std=4, length=30, decay=0.35):
+    """Log-normal echo-decay kernel shared by apply_reverb and apply_foreground_reverb."""
+    sigma = np.sqrt(np.log(1.0 + (delay_std / delay_mean) ** 2))
+    mu = (np.log(delay_mean) - 0.5 * sigma ** 2)
+    delays = np.arange(1, length + 1, dtype=np.float32)
+    kernel = (np.exp(-(np.log(delays) - mu) ** 2 / (2.0 * sigma ** 2)) / (delays * sigma * np.sqrt(2.0 * np.pi)))
+    kernel /= kernel.sum()
+    kernel *= decay
+    return kernel
+
 def apply_reverb(img, delay_mean=5, delay_std=4, length=30, decay=0.35, threshold=2.5, freq_smooth=5):
     """Simulate exponential-decay reverberation on a linear-power spectrogram.
 
@@ -31,15 +41,8 @@ def apply_reverb(img, delay_mean=5, delay_std=4, length=30, decay=0.35, threshol
     if freq_smooth > 1 and H > 1:
         mask = maximum_filter1d(mask.astype(np.float32), size=min(freq_smooth, H), axis=0) > 0
 
-    # Make log-normal delay distribution
-    sigma = np.sqrt(np.log(1.0 + (delay_std / delay_mean) ** 2))
-    mu = (np.log(delay_mean) - 0.5 * sigma ** 2)
-
     # Make the main reverb kernel
-    delays = np.arange(1, length + 1, dtype=np.float32)
-    kernel = (np.exp(-(np.log(delays) - mu) ** 2 / (2.0 * sigma ** 2)) / (delays * sigma * np.sqrt(2.0 * np.pi)))
-    kernel /= kernel.sum()
-    kernel *= decay
+    kernel = build_reverb_kernel(delay_mean, delay_std, length, decay)
     reverb = np.zeros_like(img, dtype=np.float32)
 
     # Apply
@@ -50,3 +53,19 @@ def apply_reverb(img, delay_mean=5, delay_std=4, length=30, decay=0.35, threshol
         reverb[:, delay:] += (np.where(source_mask, source, 0.0) * amount)
 
     return img + reverb
+
+def apply_foreground_reverb(fg_diff, delay_mean=5, delay_std=4, length=30, decay=0.35):
+    """Echo a foreground component (zero outside its mask) forward in time.
+
+    Used by the fg/bg swap augmentation: the foreground is reverberated BEFORE
+    it is combined with a background, so the echo tail extends past the
+    foreground mask onto whatever background it is placed on. No loud-cell
+    detection (threshold/freq_smooth) is needed - the foreground mask is
+    already exact.
+    """
+    fg_diff = np.asarray(fg_diff, dtype=np.float32)
+    kernel = build_reverb_kernel(delay_mean, delay_std, length, decay)
+    echo = np.zeros_like(fg_diff)
+    for i, delay in enumerate(range(1, length + 1)):
+        echo[:, delay:] += fg_diff[:, :-delay] * kernel[i]
+    return fg_diff + echo
