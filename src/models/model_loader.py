@@ -131,6 +131,7 @@ def loadModel(nn_name, dirnn):
                         use_cnn_adapter=config.get('use_cnn_adapter', False),
                         use_sed_head=config.get('use_sed_head', False),
                         use_gated_head=config.get('use_gated_head', False),
+                        in_chans=config.get('in_chans', 1),
                     )
 
                     missing_keys, unexpected_keys = model.load_state_dict(

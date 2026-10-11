@@ -1,0 +1,9 @@
+{
+  "name": "regnet_combined_fgbgswap",
+  "type": "regnet",
+  "seed": 0,
+  "output_folder": "/local/scratch/freangi/model_tests/regnet_combined_fgbgswap",
+  "test_name": "matched__avianz_split",
+  "status": "completed",
+  "exact_match_accuracy": 45.808383233532936
+}

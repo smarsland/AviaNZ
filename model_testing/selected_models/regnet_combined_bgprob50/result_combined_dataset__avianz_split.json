@@ -1,0 +1,9 @@
+{
+  "name": "regnet_combined_bgprob50",
+  "type": "regnet",
+  "seed": 0,
+  "output_folder": "/local/scratch/freangi/model_tests/regnet_combined_bgprob50",
+  "test_name": "combined_dataset__avianz_split",
+  "status": "completed",
+  "exact_match_accuracy": 96.1335676625659
+}

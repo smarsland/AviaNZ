@@ -1398,6 +1398,10 @@ class Trainer:
         model_config['bg_subtract'] = self.bg_subtract
         model_config['apply_reverb'] = self.apply_reverb
         model_config['fg_bg_swap'] = self.fg_bg_swap
+        model_config['kbird_prior'] = self.kbird_prior
+        model_config['use_deltas'] = self.use_deltas
+        model_config['use_sed_head'] = self.use_sed_head
+        model_config['in_chans'] = self.in_chans
         
         # Save to JSON
         config_path = os.path.join(self.output_folder, f'{self.model_type}_model_config.json')

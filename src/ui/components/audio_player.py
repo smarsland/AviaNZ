@@ -247,7 +247,18 @@ class ControllableAudio(QAudioSink):
         # Plays the entire audiodata 
         # Gets the format, then puts the data in a buffer
         # and then starts the QAudioOutput from that buffer
-        
+
+        # A sink that was started before must be stopped first:
+        # QAudioSink stays started after the buffer drains, and calling
+        # start() on an already-started sink returns None
+        self.audioThreadLoading = False
+        if self.audioThread is not None:
+            self.audioThread.join()
+            self.audioThread = None
+        if self.state() != QAudio.State.StoppedState:
+            self.stop()
+            self.reset()
+
         # Safety check for None or empty data
         if audiodata is None:
             print("ERROR: Cannot play - no audio data provided")
@@ -306,7 +317,12 @@ class ControllableAudio(QAudioSink):
         self.audioThreadLoading = True
         self.audioBuffer = self.start()
         print(f"loadArray: after start(), state={self.state()}, error={self.error()}")
-        
+
+        if self.audioBuffer is None:
+            print("ERROR: audio sink failed to start")
+            self.audioThreadLoading = False
+            return
+
         # Check if audio device failed to start
         if self.state() == QAudio.State.StoppedState and self.error() == QAudio.Error.OpenError:
             print("ERROR: Failed to open audio device!")

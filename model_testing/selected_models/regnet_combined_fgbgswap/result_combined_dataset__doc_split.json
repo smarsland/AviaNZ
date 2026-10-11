@@ -1,0 +1,9 @@
+{
+  "name": "regnet_combined_fgbgswap",
+  "type": "regnet",
+  "seed": 0,
+  "output_folder": "/local/scratch/freangi/model_tests/regnet_combined_fgbgswap",
+  "test_name": "combined_dataset__doc_split",
+  "status": "completed",
+  "exact_match_accuracy": 57.42865548690791
+}

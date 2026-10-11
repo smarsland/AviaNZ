@@ -57,14 +57,18 @@ def discover_models():
         if os.path.exists(os.path.join(models_dir, stem + '.pth')):
             models.append((stem, (models_dir, stem)))
 
-    # model_testing/ subdirectories (.pt or .pth files)
-    for json_file in glob.glob(os.path.join('model_testing', '*', '*_config.json')):
+    # model_testing/ models (.pt or .pth files). Recursive so experiment dirs like
+    # model_testing/model_tests/<exp>/ are found as well as model_testing/<exp>/.
+    for json_file in glob.glob(os.path.join('model_testing', '**', '*_config.json'),
+                               recursive=True):
         d = os.path.dirname(json_file)
         stem = os.path.basename(json_file).replace('_config.json', '')
         candidates = [stem + '.pth', stem + '.pt', stem + '_best.pt']
         for c in candidates:
             if os.path.exists(os.path.join(d, c)):
-                display = f"{stem} ({os.path.basename(d)})"
+                # Label with the parent folder so same-stem models in different
+                # experiments are distinguishable (e.g. regnet_model (model_tests/regnet_combined_fgbgswap)).
+                display = f"{stem} ({os.path.relpath(d, 'model_testing')})"
                 models.append((display, (d, stem)))
                 break
 
@@ -129,6 +133,9 @@ class NNSegmenter:
         self.spec_transform = self.config.get('spec_transform', 'Log')
         self.bg_subtract = self.config.get('bg_subtract', False)
         self.median_filter = self.config.get('median_filter', False)
+        self.fg_bg_swap = self.config.get('fg_bg_swap', False)
+        self.kbird_prior = self.config.get('kbird_prior', 0.0)
+        self.use_deltas = self.config.get('use_deltas', False)
 
     def _resample_if_needed(self, audio, sample_rate, progress_cb=None):
         """ Return (audio, sample_rate) resampled to the model's rate if needed.
@@ -162,7 +169,8 @@ class NNSegmenter:
         import src.core.spectrogram as spectrogram
         import src.core.audio_data as audio_data
         from src.models import inference
-        from model_testing.src.data.normalizer import normalize_spectrogram
+        from model_testing.src.data.normalizer import (
+            normalize_spectrogram, split_spectrogram_components)
 
         window_width = int(self.window_seconds * inference_sr)
         incr = int(self.hop_seconds * inference_sr)
@@ -205,6 +213,19 @@ class NNSegmenter:
             actual_frames = min(raw.shape[1], time_bins)
 
             # Match training preprocessing.
+            # Match training preprocessing. fg/bg-swap models were trained on
+            # cross-recombined clips; at eval they take a deterministic self
+            # bg+fg reconstruction (background mean fill, no resampling) with no
+            # cross-contamination - mirrors SpectrogramDataset(fg_bg_reconstruct=
+            # True, training=False).
+            if self.fg_bg_swap:
+                comp = split_spectrogram_components(raw[:fb], stochastic=False)
+                combined = comp['norm_bg'].copy()
+                combined[comp['fg_mask']] += comp['fg_diff'][comp['fg_mask']]
+                raw[:fb] = np.clip(
+                    combined * (comp['true_sigma'] + 1e-8) + comp['true_mu'],
+                    0, None)
+
             if self.spec_transform == 'Log':
                 proc = np.log(np.maximum(raw[:fb], 0.0) + LOG_OFFSET)
             elif self.spec_transform in ('None', None):
@@ -214,13 +235,21 @@ class NNSegmenter:
                 proc = np.log(np.maximum(raw[:fb], 0.0) + LOG_OFFSET)
 
             if self.bg_subtract or self.median_filter:
-                proc = normalize_spectrogram(
-                    proc, median_filter=self.median_filter, bg_subtract=self.bg_subtract)
+                proc = normalize_spectrogram(proc)
 
             # Zero-pad the time axis to time_bins.
             segment = np.zeros((fb, time_bins), dtype=np.float32)
             segment[:, :actual_frames] = proc[:, :actual_frames]
-            segment = segment.reshape(1, fb, time_bins, 1)
+
+            if self.use_deltas:
+                # [spec, delta, delta-delta] channels along the last axis, mirroring
+                # SpectrogramDataset._process_loaded_raw.
+                from model_testing.src.data.data_utils import SpectrogramDataset
+                d1 = SpectrogramDataset._compute_delta(segment)
+                d2 = SpectrogramDataset._compute_delta(d1)
+                segment = np.stack([segment, d1, d2], axis=-1).reshape(1, fb, time_bins, 3)
+            else:
+                segment = segment.reshape(1, fb, time_bins, 1)
 
             logits = inference.predict_batch(self.model, segment)[0]
             pred_tensor = torch.from_numpy(logits)
@@ -230,6 +259,11 @@ class NNSegmenter:
 
             if self.multilabel:
                 probs = torch.sigmoid(pred_tensor).numpy()
+                if self.kbird_prior > 0:
+                    # Max-k normalisation used in training/eval: scale sigmoid
+                    # probabilities so their sum never exceeds k.
+                    total = max(float(probs.sum()), 1e-7)
+                    probs = np.clip(probs / max(total / self.kbird_prior, 1.0), 0.0, 1.0)
                 for class_idx, prob in enumerate(probs):
                     prob = float(np.clip(prob, 0.0, 1.0))
                     if self.per_class_thresholds is not None:
