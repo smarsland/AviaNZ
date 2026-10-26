@@ -43,7 +43,6 @@ from src.core.spectrogram import Spectrogram
 from src.core.audio_data import AudioData
 from src.models import inference, model_loader
 from model_testing.src.data.normalizer import split_spectrogram_components
-from model_testing.src.data.spectrogram_utils import highpass_audio
 
 FIELD_DIR = REPO_ROOT / 'Sound Files' / 'FinalTestData'
 
@@ -119,8 +118,6 @@ class FieldModel:
     def window_probs(self, audio, sr):
         """Yield (start_s, prob_vector) per non-overlapping window."""
         audio = np.asarray(audio, dtype=np.float64)
-        if 'highpass_hz' in self.spec_params:
-            audio = highpass_audio(audio, sr, self.spec_params['highpass_hz'])
         rms = np.sqrt(np.mean(audio ** 2))
         if rms > 1e-8:
             audio = audio / rms * 0.1
