@@ -56,7 +56,7 @@ KAYTOO_CORES="${KAYTOO_CORES:-4}"
 KAYTOO_PYTHON="${KAYTOO_PYTHON:-$KAYTOO_ROOT/venv_kay/bin/python}"
 FORCE=false
 REBUILD_DATA=false
-NUM_NOISE_PER_SOURCE="${NUM_NOISE_PER_SOURCE:-20000}"
+NUM_NOISE_PER_SOURCE="${NUM_NOISE_PER_SOURCE:-1000}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -156,401 +156,401 @@ else
   echo "--- combined dataset: present, skipping build"
 fi
 
-# # ------------------------------------------------------------- 1. Kaytoo
-# echo ""
-# echo ">>> 1/5 Kaytoo pretrained"
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_KAYTOO/$dataset_key/done"
+# ------------------------------------------------------------- 1. Kaytoo
+echo ""
+echo ">>> 1/5 Kaytoo pretrained"
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_KAYTOO/$dataset_key/done"
   
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
   
-#   mkdir -p "$(dirname "$marker")"
-#   "$KAYTOO_PYTHON" scripts/evaluate_kaytoo.py "$folder" \
-#     --kaytoo-root "$KAYTOO_ROOT" \
-#     --mapping "$SCRIPT_DIR/data/DOC_bird_naming_map.csv" \
-#     --cores "$KAYTOO_CORES" \
-#     --output "$(dirname "$marker")"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  "$KAYTOO_PYTHON" scripts/evaluate_kaytoo.py "$folder" \
+    --kaytoo-root "$KAYTOO_ROOT" \
+    --mapping "$SCRIPT_DIR/data/DOC_bird_naming_map.csv" \
+    --cores "$KAYTOO_CORES" \
+    --output "$(dirname "$marker")"
+  touch "$marker"
+done
 
-# # ------------------------------------------------------------ 2. BirdNET
-# echo ""
-# echo ">>> 2/5 BirdNET pretrained"
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_BIRDNET/$dataset_key/done"
+# ------------------------------------------------------------ 2. BirdNET
+echo ""
+echo ">>> 2/5 BirdNET pretrained"
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_BIRDNET/$dataset_key/done"
   
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
   
-#   mkdir -p "$(dirname "$marker")"
-#   python3 scripts/evaluate_birdnet.py "$folder" \
-#     --output "$(dirname "$marker")"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  python3 scripts/evaluate_birdnet.py "$folder" \
+    --output "$(dirname "$marker")"
+  touch "$marker"
+done
 
-# # -------------------------------------------------------- 3. RegNet / DOC
-# echo ""
-# echo ">>> 3/9 RegNet + bgsub, DOC only"
+# -------------------------------------------------------- 3. RegNet / DOC
+echo ""
+echo ">>> 3/9 RegNet + bgsub, DOC only"
 
-# # Training
-# training_marker="$OUT_REGNET_DOC/training_history.json"
-# if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-#   echo "  Training already done, skipping"
-# else
-#   python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC" \
-#     --model-type regnet \
-#     --pretrained "$PRETRAINED_MODEL" \
-#     --spec-transform Log \
-#     --bg-subtract \
-#     --kbird-prior 2.0 \
-#     --epochs 40 --patience 15 --seed 0
-# fi
+# Training
+training_marker="$OUT_REGNET_DOC/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --bg-subtract \
+    --kbird-prior 2.0 \
+    --epochs 40 --patience 15 --seed 0
+fi
 
-# # Evaluation
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_REGNET_DOC/$dataset_key/done"
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_DOC/$dataset_key/done"
   
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
   
-#   mkdir -p "$(dirname "$marker")"
-#   python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC" \
-#     --model-type regnet \
-#     --spec-transform Log \
-#     --bg-subtract \
-#     --kbird-prior 2.0 \
-#     --seed 0 \
-#     --eval-only --test-folder "$folder"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC" \
+    --model-type regnet \
+    --spec-transform Log \
+    --bg-subtract \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
-# # --------------------------------------------------- 4. RegNet / combined
-# echo ""
-# echo ">>> 4/9 RegNet + bgsub, combined DOC + AviaNZ"
+# --------------------------------------------------- 4. RegNet / combined
+echo ""
+echo ">>> 4/9 RegNet + bgsub, combined DOC + AviaNZ"
 
-# # Training
-# training_marker="$OUT_REGNET_COMBINED/training_history.json"
-# if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-#   echo "  Training already done, skipping"
-# else
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_COMBINED" \
-#     --model-type regnet \
-#     --pretrained "$PRETRAINED_MODEL" \
-#     --spec-transform Log \
-#     --bg-subtract \
-#     --kbird-prior 2.0 \
-#     --epochs 40 --patience 15 --seed 0
-# fi
+# Training
+training_marker="$OUT_REGNET_COMBINED/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_COMBINED" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --bg-subtract \
+    --kbird-prior 2.0 \
+    --epochs 40 --patience 15 --seed 0
+fi
 
-# # Evaluation
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_REGNET_COMBINED/$dataset_key/done"
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_COMBINED/$dataset_key/done"
   
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
   
-#   mkdir -p "$(dirname "$marker")"
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_COMBINED" \
-#     --model-type regnet \
-#     --spec-transform Log \
-#     --bg-subtract \
-#     --kbird-prior 2.0 \
-#     --seed 0 \
-#     --eval-only --test-folder "$folder"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_COMBINED" \
+    --model-type regnet \
+    --spec-transform Log \
+    --bg-subtract \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
-# # --------------------------------------- 5. RegNet / combined, no bg-subtract
-# echo ""
-# echo ">>> 5/9 RegNet, combined DOC + AviaNZ, NO bg-subtract (ablation vs 4/9)"
+# --------------------------------------- 5. RegNet / combined, no bg-subtract
+echo ""
+echo ">>> 5/9 RegNet, combined DOC + AviaNZ, NO bg-subtract (ablation vs 4/9)"
 
-# # Training
-# training_marker="$OUT_REGNET_NOBGSUB/training_history.json"
-# if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-#   echo "  Training already done, skipping"
-# else
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOBGSUB" \
-#     --model-type regnet \
-#     --pretrained "$PRETRAINED_MODEL" \
-#     --spec-transform Log \
-#     --kbird-prior 2.0 \
-#     --epochs 40 --patience 15 --seed 0
-# fi
+# Training
+training_marker="$OUT_REGNET_NOBGSUB/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOBGSUB" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --epochs 40 --patience 15 --seed 0
+fi
 
-# # Evaluation
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_REGNET_NOBGSUB/$dataset_key/done"
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_NOBGSUB/$dataset_key/done"
 
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
 
-#   mkdir -p "$(dirname "$marker")"
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOBGSUB" \
-#     --model-type regnet \
-#     --spec-transform Log \
-#     --kbird-prior 2.0 \
-#     --seed 0 \
-#     --eval-only --test-folder "$folder"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOBGSUB" \
+    --model-type regnet \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
-# # -------------------------------------------- 6. RegNet (no bg-subtract) + deltas
-# echo ""
-# echo ">>> 6/9 RegNet (no bg-subtract) + deltas, combined DOC + AviaNZ"
+# -------------------------------------------- 6. RegNet (no bg-subtract) + deltas
+echo ""
+echo ">>> 6/9 RegNet (no bg-subtract) + deltas, combined DOC + AviaNZ"
 
-# # Training
-# training_marker="$OUT_REGNET_DELTAS/training_history.json"
-# if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-#   echo "  Training already done, skipping"
-# else
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_DELTAS" \
-#     --model-type regnet \
-#     --pretrained "$PRETRAINED_MODEL" \
-#     --spec-transform Log \
-#     --deltas \
-#     --kbird-prior 2.0 \
-#     --epochs 40 --patience 15 --seed 0
-# fi
+# Training
+training_marker="$OUT_REGNET_DELTAS/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_DELTAS" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --deltas \
+    --kbird-prior 2.0 \
+    --epochs 40 --patience 15 --seed 0
+fi
 
-# # Evaluation
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_REGNET_DELTAS/$dataset_key/done"
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_DELTAS/$dataset_key/done"
 
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
 
-#   mkdir -p "$(dirname "$marker")"
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_DELTAS" \
-#     --model-type regnet \
-#     --spec-transform Log \
-#     --deltas \
-#     --kbird-prior 2.0 \
-#     --seed 0 \
-#     --eval-only --test-folder "$folder"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_DELTAS" \
+    --model-type regnet \
+    --spec-transform Log \
+    --deltas \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
-# # --------------------------------------- 7. RegNet (no bg-subtract) + freeze-stages 2
-# echo ""
-# echo ">>> 7/9 RegNet (no bg-subtract) + freeze-stages 2, combined DOC + AviaNZ"
+# --------------------------------------- 7. RegNet (no bg-subtract) + freeze-stages 2
+echo ""
+echo ">>> 7/9 RegNet (no bg-subtract) + freeze-stages 2, combined DOC + AviaNZ"
 
-# # Training
-# training_marker="$OUT_REGNET_FREEZE/training_history.json"
-# if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-#   echo "  Training already done, skipping"
-# else
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FREEZE" \
-#     --model-type regnet \
-#     --pretrained "$PRETRAINED_MODEL" \
-#     --spec-transform Log \
-#     --freeze-stages 2 \
-#     --kbird-prior 2.0 \
-#     --epochs 40 --patience 15 --seed 0
-# fi
+# Training
+training_marker="$OUT_REGNET_FREEZE/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FREEZE" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --freeze-stages 2 \
+    --kbird-prior 2.0 \
+    --epochs 40 --patience 15 --seed 0
+fi
 
-# # Evaluation
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_REGNET_FREEZE/$dataset_key/done"
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_FREEZE/$dataset_key/done"
 
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
 
-#   mkdir -p "$(dirname "$marker")"
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FREEZE" \
-#     --model-type regnet \
-#     --spec-transform Log \
-#     --freeze-stages 2 \
-#     --kbird-prior 2.0 \
-#     --seed 0 \
-#     --eval-only --test-folder "$folder"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FREEZE" \
+    --model-type regnet \
+    --spec-transform Log \
+    --freeze-stages 2 \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
-# # ----------------------------------------------- 8. RegNet (no bg-subtract) + noise-mixing + reverb
-# echo ""
-# echo ">>> 8/9 RegNet (no bg-subtract) + noise-mixing + apply-reverb (freefield wind/rain + AviaNZ background)"
+# ----------------------------------------------- 8. RegNet (no bg-subtract) + noise-mixing + reverb
+echo ""
+echo ">>> 8/9 RegNet (no bg-subtract) + noise-mixing + apply-reverb (freefield wind/rain + AviaNZ background)"
 
-# if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
-#   echo "  WARNING: noise folder not found at $NOISE_FOLDER"
-#   echo "  Build it first with: bash build_combined_dataset.sh (or scripts/build_noise_dataset.py)"
-# else
-#   # Training
-#   training_marker="$OUT_REGNET_NOISE/training_history.json"
-#   if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-#     echo "  Training already done, skipping"
-#   else
-#     python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE" \
-#       --model-type regnet \
-#       --pretrained "$PRETRAINED_MODEL" \
-#       --spec-transform Log \
-#       --kbird-prior 2.0 \
-#       --noise-folder "$NOISE_FOLDER" \
-#       --noise "$NOISE_RATIO" \
-#       --apply-reverb \
-#       --epochs 40 --patience 15 --seed 0
-#   fi
+if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
+  echo "  WARNING: noise folder not found at $NOISE_FOLDER"
+  echo "  Build it first with: bash build_combined_dataset.sh (or scripts/build_noise_dataset.py)"
+else
+  # Training
+  training_marker="$OUT_REGNET_NOISE/training_history.json"
+  if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+    echo "  Training already done, skipping"
+  else
+    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE" \
+      --model-type regnet \
+      --pretrained "$PRETRAINED_MODEL" \
+      --spec-transform Log \
+      --kbird-prior 2.0 \
+      --noise-folder "$NOISE_FOLDER" \
+      --noise "$NOISE_RATIO" \
+      --apply-reverb \
+      --epochs 40 --patience 15 --seed 0
+  fi
 
-#   # Evaluation
-#   for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#     dataset_key="$(get_dataset_key "$folder")"
-#     marker="$OUT_REGNET_NOISE/$dataset_key/done"
+  # Evaluation
+  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    dataset_key="$(get_dataset_key "$folder")"
+    marker="$OUT_REGNET_NOISE/$dataset_key/done"
 
-#     if [[ "$FORCE" == false && -f "$marker" ]]; then
-#       echo "  Skipping $dataset_key (already evaluated)"
-#       continue
-#     fi
+    if [[ "$FORCE" == false && -f "$marker" ]]; then
+      echo "  Skipping $dataset_key (already evaluated)"
+      continue
+    fi
 
-#     mkdir -p "$(dirname "$marker")"
-#     python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE" \
-#       --model-type regnet \
-#       --spec-transform Log \
-#       --kbird-prior 2.0 \
-#       --apply-reverb \
-#       --seed 0 \
-#       --eval-only --test-folder "$folder"
-#     touch "$marker"
-#   done
-# fi
+    mkdir -p "$(dirname "$marker")"
+    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_NOISE" \
+      --model-type regnet \
+      --spec-transform Log \
+      --kbird-prior 2.0 \
+      --apply-reverb \
+      --seed 0 \
+      --eval-only --test-folder "$folder"
+    touch "$marker"
+  done
+fi
 
 # --------------------------------------------- 9. RegNet (no bg-subtract) + background-prob 0.5
-# echo ""
-# echo ">>> 9/10 RegNet (no bg-subtract) + background-prob 0.5, combined DOC + AviaNZ"
+echo ""
+echo ">>> 9/10 RegNet (no bg-subtract) + background-prob 0.5, combined DOC + AviaNZ"
 
-# # Training
-# training_marker="$OUT_REGNET_BGPROB/training_history.json"
-# if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-#   echo "  Training already done, skipping"
-# else
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_BGPROB" \
-#     --model-type regnet \
-#     --pretrained "$PRETRAINED_MODEL" \
-#     --spec-transform Log \
-#     --kbird-prior 2.0 \
-#     --background-prob 0.5 \
-#     --epochs 40 --patience 15 --seed 0
-# fi
+# Training
+training_marker="$OUT_REGNET_BGPROB/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_BGPROB" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --background-prob 0.5 \
+    --epochs 40 --patience 15 --seed 0
+fi
 
-# # Evaluation
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_REGNET_BGPROB/$dataset_key/done"
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_BGPROB/$dataset_key/done"
 
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
 
-#   mkdir -p "$(dirname "$marker")"
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_BGPROB" \
-#     --model-type regnet \
-#     --spec-transform Log \
-#     --kbird-prior 2.0 \
-#     --seed 0 \
-#     --eval-only --test-folder "$folder"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_BGPROB" \
+    --model-type regnet \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
-# # ------------------------------------------------ 10. RegNet (no bg-subtract) + fg/bg swap
-# echo ""
-# echo ">>> 10/11 RegNet (no bg-subtract) + fg/bg swap (batch_size/4 x 4 combos, labels follow foreground)"
+# ------------------------------------------------ 10. RegNet (no bg-subtract) + fg/bg swap
+echo ""
+echo ">>> 10/11 RegNet (no bg-subtract) + fg/bg swap (batch_size/4 x 4 combos, labels follow foreground)"
 
-# # Training
-# training_marker="$OUT_REGNET_FGBG/training_history.json"
-# if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-#   echo "  Training already done, skipping"
-# else
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG" \
-#     --model-type regnet \
-#     --pretrained "$PRETRAINED_MODEL" \
-#     --spec-transform Log \
-#     --kbird-prior 2.0 \
-#     --fg-bg-swap \
-#     --epochs 40 --patience 15 --seed 0
-# fi
+# Training
+training_marker="$OUT_REGNET_FGBG/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --epochs 40 --patience 15 --seed 0
+fi
 
-# # Evaluation (eval-time input is a deterministic self bg+fg reconstruction - no cross-contamination)
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_REGNET_FGBG/$dataset_key/done"
+# Evaluation (eval-time input is a deterministic self bg+fg reconstruction - no cross-contamination)
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_FGBG/$dataset_key/done"
 
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
 
-#   mkdir -p "$(dirname "$marker")"
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG" \
-#     --model-type regnet \
-#     --spec-transform Log \
-#     --kbird-prior 2.0 \
-#     --fg-bg-swap \
-#     --seed 0 \
-#     --eval-only --test-folder "$folder"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG" \
+    --model-type regnet \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
-# # ------------------------------------ 11. RegNet (no bg-subtract) + fg/bg swap + foreground reverb
-# echo ""
-# echo ">>> 11/11 RegNet (no bg-subtract) + fg/bg swap + reverb on foregrounds (echo trails onto partner bg)"
+# ------------------------------------ 11. RegNet (no bg-subtract) + fg/bg swap + foreground reverb
+echo ""
+echo ">>> 11/11 RegNet (no bg-subtract) + fg/bg swap + reverb on foregrounds (echo trails onto partner bg)"
 
-# # Training
-# training_marker="$OUT_REGNET_FGBG_REVERB/training_history.json"
-# if [[ "$FORCE" == false && -f "$training_marker" ]]; then
-#   echo "  Training already done, skipping"
-# else
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG_REVERB" \
-#     --model-type regnet \
-#     --pretrained "$PRETRAINED_MODEL" \
-#     --spec-transform Log \
-#     --kbird-prior 2.0 \
-#     --fg-bg-swap \
-#     --apply-reverb \
-#     --epochs 40 --patience 15 --seed 0
-# fi
+# Training
+training_marker="$OUT_REGNET_FGBG_REVERB/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG_REVERB" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --apply-reverb \
+    --epochs 40 --patience 15 --seed 0
+fi
 
-# # Evaluation (reverb is train-only; eval uses the deterministic self bg+fg reconstruction)
-# for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-#   dataset_key="$(get_dataset_key "$folder")"
-#   marker="$OUT_REGNET_FGBG_REVERB/$dataset_key/done"
+# Evaluation (reverb is train-only; eval uses the deterministic self bg+fg reconstruction)
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_FGBG_REVERB/$dataset_key/done"
 
-#   if [[ "$FORCE" == false && -f "$marker" ]]; then
-#     echo "  Skipping $dataset_key (already evaluated)"
-#     continue
-#   fi
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
 
-#   mkdir -p "$(dirname "$marker")"
-#   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG_REVERB" \
-#     --model-type regnet \
-#     --spec-transform Log \
-#     --kbird-prior 2.0 \
-#     --fg-bg-swap \
-#     --apply-reverb \
-#     --seed 0 \
-#     --eval-only --test-folder "$folder"
-#   touch "$marker"
-# done
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_FGBG_REVERB" \
+    --model-type regnet \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --apply-reverb \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
 # ------------------------------------------ 12. RegNet (no bg-subtract) + dawn-chorus noise
 echo ""
