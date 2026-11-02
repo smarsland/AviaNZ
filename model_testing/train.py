@@ -108,6 +108,10 @@ Examples:
                             "cross-combinations with a random partner (generate_spectrogram_combinations). "
                             "Labels follow the FOREGROUND of each combination. At eval/test time the "
                             "model input is a deterministic self bg+fg reconstruction (no cross-contamination).")
+    parser.add_argument('--union-mix', type=float, default=0.0, dest='union_mix_prob',
+                       help="With --fg-bg-swap: probability of merging a pair of labelled samples by "
+                            "elementwise max of their log-spectrograms, labels = union (OR). Teaches "
+                            "polyphony (multiple species at once). 0 = disabled (default), try 0.5.")
     parser.add_argument('--use-asl', action='store_true', dest='use_asl',
                        help="Use Asymmetric Loss (ASL) instead of BCE — clips easy-negative gradients, "
                             "reducing gradient suppression from all-background samples")

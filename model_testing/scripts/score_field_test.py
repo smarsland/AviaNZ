@@ -42,7 +42,7 @@ import torch
 from src.core.spectrogram import Spectrogram
 from src.core.audio_data import AudioData
 from src.models import inference, model_loader
-from model_testing.src.data.normalizer import split_spectrogram_components
+from model_testing.src.data.normalizer import split_spectrogram_components, normalize_spectrogram
 
 FIELD_DIR = REPO_ROOT / 'Sound Files' / 'FinalTestData'
 
@@ -99,6 +99,8 @@ class FieldModel:
         self.freq_bins = self.config.get('freq_bins', 224)
         self.spec_params = self.config.get('spectrogram_params', {})
         self.fg_bg_swap = self.config.get('fg_bg_swap', False)
+        self.bg_subtract = self.config.get('bg_subtract', False)
+        self.use_deltas = self.config.get('use_deltas', False)
         self.kbird_prior = self.config.get('kbird_prior', 0.0)
 
         thresh_path = self.model_dir / 'thresholds_combined.csv'
@@ -152,10 +154,19 @@ class FieldModel:
                     combined * (comp['true_sigma'] + 1e-8) + comp['true_mu'], 0, None)
 
             proc = np.log(np.maximum(raw[:fb], 0.0) + 1e-7).astype(np.float32)
+            if self.bg_subtract:
+                proc = normalize_spectrogram(proc)
             x = np.zeros((fb, self.time_bins), dtype=np.float32)
             n = min(proc.shape[1], self.time_bins)
             x[:, :n] = proc[:, :n]
-            x = x.reshape(1, fb, self.time_bins, 1)
+            if self.use_deltas:
+                from model_testing.src.data.data_utils import SpectrogramDataset
+                d1 = SpectrogramDataset._compute_delta(x)
+                d2 = SpectrogramDataset._compute_delta(d1)
+                x = np.stack([x, d1, d2], axis=-1).reshape(1, fb, self.time_bins, 3)
+                x = np.transpose(x, (0, 3, 1, 2))
+            else:
+                x = x.reshape(1, fb, self.time_bins, 1)
 
             probs = torch.sigmoid(
                 torch.from_numpy(inference.predict_batch(self.model, x)[0])).numpy()

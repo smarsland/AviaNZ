@@ -103,9 +103,11 @@ OUT_REGNET_FGBG_REVERB="${OUT_ROOT}/regnet_combined_fgbgswap_reverb"
 NOISE_FOLDER="${NOISE_FOLDER:-${BASE}/noise_dataset/noise_combined}"
 NOISE_RATIO="${NOISE_RATIO:-0.2}"
 OUT_REGNET_CHORUS="${OUT_ROOT}/regnet_combined_chorusnoise"
+OUT_REGNET_UNIONMIX="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_unionmix"
 CHORUS_WAV="${CHORUS_WAV:-${REPO_ROOT}/Sound Files/UK_dawn_chorus.wav}"
 CHORUS_FOLDER="${CHORUS_FOLDER:-${BASE}/noise_dataset/uk_dawn_chorus}"
 CHORUS_NOISE_RATIO="${CHORUS_NOISE_RATIO:-0.2}"
+UNION_MIX_PROB="${UNION_MIX_PROB:-0.5}"
 
 PRETRAINED_MODEL="${BIRDCLEF_PRETRAINED_PATH:-BirdClefModels/model_fold0.pth}"
 
@@ -596,6 +598,48 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
     --model-type regnet \
     --spec-transform Log \
     --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
+
+# ----------------------------- 13. RegNet + fg/bg swap + reverb + union-mix (polyphony)
+echo ""
+echo ">>> 13 RegNet + fg/bg swap + reverb + union-mix $UNION_MIX_PROB (elementwise max, OR'd labels)"
+
+# Training
+training_marker="$OUT_REGNET_UNIONMIX/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_UNIONMIX" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --apply-reverb \
+    --union-mix "$UNION_MIX_PROB" \
+    --epochs 40 --patience 15 --seed 0
+fi
+
+# Evaluation (union-mix is train-only; eval uses the deterministic self bg+fg reconstruction)
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_UNIONMIX/$dataset_key/done"
+
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
+
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_UNIONMIX" \
+    --model-type regnet \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --apply-reverb \
     --seed 0 \
     --eval-only --test-folder "$folder"
   touch "$marker"

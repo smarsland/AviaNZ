@@ -1019,7 +1019,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        reverb_threshold=2.5,
                        use_temporal_roll=True,
                        mixup_mode='mixup', noise_mode='full', background_prob=0.0,
-                       ast_channel_dir=None, use_deltas=False, fg_bg_reconstruct=False):
+                       ast_channel_dir=None, use_deltas=False, fg_bg_reconstruct=False,
+                       union_mix_prob=0.0):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -1152,6 +1153,9 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                   f"batches are built from 4 bg/fg combinations instead")
         print(f"FG/BG swap collate: batch of {batch_size} = {batch_size // 4} samples x 4 combinations")
         train_collate_fn = FgBgSwapCollate(train_dataset)
+        if union_mix_prob > 0:
+            print(f"Union-mix enabled: prob={union_mix_prob} (elementwise max, OR'd labels)")
+            train_collate_fn = UnionMixCollate(train_collate_fn, prob=union_mix_prob)
         val_collate_fn = None
     elif mixup_alpha > 0:
         # Standard mode with mixup/cutmix
@@ -1234,6 +1238,47 @@ class FgBgSwapCollate:
             # variants 0 and 2 use this sample's label; 1 and 3 use the partner's.
             ys.extend([own, partner, own, partner])
         return torch.stack(xs), torch.stack(ys)
+
+
+class UnionMixCollate:
+    """Wraps FgBgSwapCollate: with probability `prob`, merges pairs of samples by
+    elementwise MAX of their (log) spectrograms, with labels = union (logical OR).
+
+    Rationale: overlapping bird calls occupy mostly disjoint time-frequency bins,
+    so the louder source dominates each bin. Elementwise max of log-spectrograms
+    approximates this far better than mixup's convex blend (which produces a
+    ghostly average and fractional labels). The OR'd label teaches the model that
+    BOTH species are present, matching the polyphonic field recordings.
+
+    Only pairs where both samples carry at least one label are merged, so pure
+    background samples are never turned into phantom birds.
+    """
+
+    def __init__(self, base_collate, prob=0.5):
+        self.base_collate = base_collate
+        self.prob = prob
+
+    def __call__(self, batch):
+        data, labels = self.base_collate(batch)
+        if self.prob <= 0:
+            return data, labels
+
+        n = data.size(0)
+        has_label = labels.sum(dim=1) > 0
+        perm = torch.randperm(n)
+        # Pair i with perm[i]; merge only when both have a label and coin flip passes.
+        merge = has_label & has_label[perm] & (torch.rand(n) < self.prob)
+        # Avoid double-merging a pair (i merged into j and j into i): only merge
+        # when i < perm[i] so each unordered pair is considered once.
+        merge = merge & (torch.arange(n) < perm)
+
+        mixed_data = data.clone()
+        mixed_labels = labels.clone()
+        for i in torch.nonzero(merge).flatten().tolist():
+            j = int(perm[i])
+            mixed_data[i] = torch.maximum(data[i], data[j])
+            mixed_labels[i] = torch.clamp(labels[i] + labels[j], max=1.0)
+        return mixed_data, mixed_labels
 
 
 class MixupCollate:
