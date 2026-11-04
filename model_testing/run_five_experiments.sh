@@ -104,6 +104,7 @@ NOISE_FOLDER="${NOISE_FOLDER:-${BASE}/noise_dataset/noise_combined}"
 NOISE_RATIO="${NOISE_RATIO:-0.2}"
 OUT_REGNET_CHORUS="${OUT_ROOT}/regnet_combined_chorusnoise"
 OUT_REGNET_UNIONMIX="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_unionmix"
+OUT_REGNET_CW="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_classweights"
 CHORUS_WAV="${CHORUS_WAV:-${REPO_ROOT}/Sound Files/UK_dawn_chorus.wav}"
 CHORUS_FOLDER="${CHORUS_FOLDER:-${BASE}/noise_dataset/uk_dawn_chorus}"
 CHORUS_NOISE_RATIO="${CHORUS_NOISE_RATIO:-0.2}"
@@ -635,6 +636,48 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
 
   mkdir -p "$(dirname "$marker")"
   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_UNIONMIX" \
+    --model-type regnet \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --apply-reverb \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
+
+# --------------------- 14. RegNet + fg/bg swap + reverb + class-weights (rare-class recall)
+echo ""
+echo ">>> 14 RegNet + fg/bg swap + reverb + class-weights (inverse-freq pos_weight, now applied under kbird)"
+
+# Training
+training_marker="$OUT_REGNET_CW/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_CW" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --apply-reverb \
+    --class-weights \
+    --epochs 40 --patience 15 --seed 0
+fi
+
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_CW/$dataset_key/done"
+
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
+
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_CW" \
     --model-type regnet \
     --spec-transform Log \
     --kbird-prior 2.0 \

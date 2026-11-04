@@ -723,9 +723,11 @@ class Trainer:
             # equals k.  This encodes the prior that at most ~k species are active
             # per segment without forcing class competition (unlike k*softmax which
             # uses a softmax and makes classes compete for probability mass).
-            # pos_weight is not used in this mode.
+            # pos_weight (per-class inverse-frequency) is applied to the per-element
+            # BCE so rare/weak classes are not drowned out by the many easy negatives.
             _k = self.kbird_prior
-            def criterion(out, tgt, _k=_k):
+            _pw = pos_weight  # [C] tensor or None
+            def criterion(out, tgt, _k=_k, _pw=_pw):
                 # Disable autocast: F.binary_cross_entropy is forbidden inside
                 # an autocast context regardless of input dtype.
                 with torch.amp.autocast('cuda', enabled=False):
@@ -735,8 +737,13 @@ class Trainer:
                     # nan_to_num before clamp: torch.clamp passes NaN through unchanged
                     # which would trigger the CUDA-side assertion in binary_cross_entropy.
                     p_norm = (p / scale).nan_to_num(nan=0.5).clamp(1e-7, 1.0 - 1e-7)
-                    return F.binary_cross_entropy(p_norm, tgt.float(), reduction='none')
-            print(f"Using k-bird prior (max-{self.kbird_prior:.1f} normalisation)")
+                    loss = F.binary_cross_entropy(p_norm, tgt.float(), reduction='none')
+                    if _pw is not None:
+                        # Weight only the positive terms by the class weight.
+                        loss = loss * (1.0 + tgt.float() * (_pw.unsqueeze(0) - 1.0))
+                    return loss
+            print(f"Using k-bird prior (max-{self.kbird_prior:.1f} normalisation)"
+                  + (" with class weights" if pos_weight is not None else ""))
         elif self.use_asl:
             criterion = AsymmetricLoss(
                 gamma_neg=self.asl_gamma_neg,
