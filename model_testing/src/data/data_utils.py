@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 from scipy.stats import boxcox
 from scipy.ndimage import label
 from .normalizer import (
+    embed_foreground_in_background,
     generate_spectrogram_combinations,
     get_background_spectrogram,
     normalize_spectrogram,
@@ -227,7 +228,8 @@ class SpectrogramDataset(Dataset):
                  spec_transform="Log", training=True, width_downsizing=None, bg_subtract=False,
                  apply_reverb=False, reverb_prob=0.5, reverb_decay_range=(0.15, 0.6),
                  reverb_delay_range=(2, 40), reverb_threshold=2.5, use_temporal_roll=True, noise_mode='full',
-                 background_prob=0.0, ast_channel_dir=None, use_deltas=False, fg_bg_reconstruct=False):
+                 background_prob=0.0, ast_channel_dir=None, use_deltas=False, fg_bg_reconstruct=False,
+                 context_embed=False):
         """
         Initialize SpectrogramDataset.
         
@@ -291,6 +293,7 @@ class SpectrogramDataset(Dataset):
         self.noise_mode = noise_mode
         self.background_prob = background_prob if training else 0.0
         self.fg_bg_reconstruct = fg_bg_reconstruct
+        self.context_embed = context_embed if training else False
         self.ast_channel_dir = ast_channel_dir
         self.use_deltas = use_deltas
         self.rng = np.random.RandomState(21390)
@@ -298,7 +301,7 @@ class SpectrogramDataset(Dataset):
         # Cache noise data in memory (WAY faster than loading from disk every time)
         # Only cache if noise augmentation is actually enabled
         self.noise_cache = []
-        if self.noise_filenames and self.noise_ratio > 0:
+        if self.noise_filenames and (self.noise_ratio > 0 or self.context_embed):
             print(f"Loading {len(self.noise_filenames)} noise files into memory...")
             for noise_file in self.noise_filenames:
                 noise_data = np.load(noise_file)
@@ -369,8 +372,16 @@ class SpectrogramDataset(Dataset):
             data = np.squeeze(data)
         assert data.ndim == 2, f"Data should be 2D after squeeze, got {data.shape}"
 
-        # FG/BG combination mode
-        if self.fg_bg_reconstruct:
+        # Context embedding: place this clip's foreground at a random offset inside
+        # a wide (img_width) real background, so training windows match continuous
+        # field recordings instead of self-repetition padding. Falls through to the
+        # normal transform/pad pipeline below (padding becomes a no-op at full width).
+        if self.context_embed:
+            data = self._embed_in_context(data)
+
+        # FG/BG combination mode (skipped when context embedding already produced
+        # a full-width sample)
+        if self.fg_bg_reconstruct and not self.context_embed:
             if self.training:
                 # Return 4 raw linear-power bg/fg variants for this sample:
                 # [bgA+fgA, bgA+fgB, bgB+fgA, bgB+fgB] where B is a random partner
@@ -518,6 +529,43 @@ class SpectrogramDataset(Dataset):
             y = torch.zeros_like(y)
         
         return x, y
+
+    def _embed_in_context(self, data):
+        """Embed this sample's foreground into a wide real-background canvas.
+
+        Background source: a random cached noise spectrogram (AviaNZ gaps /
+        freefield) when available, otherwise a random partner clip's background
+        (tiled to full width - benign for a roughly stationary noise floor).
+        Reverb (when --apply-reverb is on) is applied to the foreground before
+        placement, as in the fg/bg swap path.
+        """
+        if data.shape[1] >= self.img_width:
+            return data
+
+        reverb_fn = None
+        if self.apply_reverb and self.rng.rand() < self.reverb_prob:
+            delay_min, delay_max = self.reverb_delay_range
+            delay_mean = self.rng.randint(delay_min, delay_max + 1)
+            delay_std = delay_mean * self.rng.uniform(0.5, 1.5)
+            length = max(60, int(delay_max * 2))
+            decay = self.rng.uniform(*self.reverb_decay_range)
+            reverb_fn = lambda fg: apply_foreground_reverb(fg, delay_mean, delay_std, length, decay)
+
+        if self.noise_cache:
+            bg = self.noise_cache[self.rng.randint(0, len(self.noise_cache))]
+        elif len(self.filenames) > 1:
+            partner_idx = self.rng.randint(0, len(self.filenames))
+            bg = np.load(self.filenames[partner_idx])
+            while bg.ndim > 2:
+                bg = np.squeeze(bg)
+        else:
+            bg = data
+
+        # Heights must match (same mel bin count); guard against odd inputs.
+        if bg.shape[0] != data.shape[0]:
+            bg = data
+        return embed_foreground_in_background(data, bg, self.img_width, self.rng,
+                                              reverb_fn=reverb_fn)
 
     def _process_loaded_raw(self, data):
         """The post-load transform pipeline shared by __getitem__ and FgBgSwapCollate:
@@ -1020,7 +1068,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        use_temporal_roll=True,
                        mixup_mode='mixup', noise_mode='full', background_prob=0.0,
                        ast_channel_dir=None, use_deltas=False, fg_bg_reconstruct=False,
-                       union_mix_prob=0.0):
+                       union_mix_prob=0.0, context_embed=False):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -1078,6 +1126,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         ast_channel_dir=ast_channel_dir,
         use_deltas=use_deltas,
         fg_bg_reconstruct=fg_bg_reconstruct,
+        context_embed=context_embed,
     )
 
     # Only create validation dataset if validation data exists
@@ -1146,8 +1195,10 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             print(f"  Draws per epoch  : {n_labelled} (~{n_labelled//2} bird, ~{n_labelled//2} background)")
     
     # Create data loaders
-    # Determine collate function based on mode
-    if fg_bg_reconstruct:
+    # Determine collate function based on mode. Context embedding produces a
+    # standard full-width sample per item, so it uses the standard collate even
+    # when combined with fg/bg decomposition flags.
+    if fg_bg_reconstruct and not context_embed:
         if mixup_alpha > 0:
             print(f"WARNING: --fg-bg-swap overrides mixup (mixup disabled); "
                   f"batches are built from 4 bg/fg combinations instead")
@@ -1176,7 +1227,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         train_collate_fn = None
         val_collate_fn = None
     
-    if fg_bg_reconstruct:
+    if fg_bg_reconstruct and not context_embed:
         # The collate combines batch_size/4 quarter-samples into a full batch, so
         # the loader must draw batch_size/4 raw items per batch to end up with
         # batch_size combined samples.

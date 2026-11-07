@@ -148,6 +148,61 @@ def generate_spectrogram_combinations(img1, img2, reverb_fn=None):
     return bg_a_fg_a, bg_a_fg_b, bg_b_fg_a, bg_b_fg_b
 
 
+def embed_foreground_in_background(fg, bg, target_width, rng, reverb_fn=None):
+    """Embed a labelled clip's foreground into a wide background canvas.
+
+    Training clips are short and call-centred (~5s), so padding them up to the
+    model's input width by resampling their own columns makes the call fill the
+    window - a configuration that never occurs in continuous field recordings.
+    This instead places the clip's foreground (in normalized space, zero outside
+    the foreground mask) at a random time offset inside a target_width-wide
+    canvas of REAL background (e.g. an AviaNZ gap / freefield noise clip), so the
+    model learns "call is a small region inside a wide busy window".
+
+    fg, bg: raw linear-power spectrograms (H, W). Heights must match.
+    rng: np.random.RandomState. reverb_fn: optional foreground reverb (as in
+    generate_spectrogram_combinations).
+
+    Returns the embedded spectrogram (H, target_width), or fg unchanged if fg is
+    already at least target_width wide (nothing to embed into).
+    """
+    fg = np.asarray(fg, dtype=np.float32)
+    bg = np.asarray(bg, dtype=np.float32)
+    W_fg = fg.shape[1]
+    if W_fg >= target_width:
+        return fg
+    if fg.shape[0] != bg.shape[0]:
+        raise ValueError(
+            f"embed_foreground_in_background requires equal heights, got "
+            f"{fg.shape[0]} and {bg.shape[0]}."
+        )
+
+    comp_fg = split_spectrogram_components(fg)
+    comp_bg = split_spectrogram_components(bg)
+
+    # Background canvas at target width: random crop if the source is wide
+    # enough, tile otherwise (tiling a noise floor is benign - it is roughly
+    # stationary, unlike tiling a call foreground).
+    norm_bg = comp_bg['norm_bg']
+    W_bg = norm_bg.shape[1]
+    if W_bg >= target_width:
+        start = int(rng.randint(0, W_bg - target_width + 1))
+        canvas = norm_bg[:, start:start + target_width].copy()
+    else:
+        reps = int(np.ceil(target_width / W_bg))
+        canvas = np.tile(norm_bg, (1, reps))[:, :target_width].copy()
+
+    fg_diff = comp_fg['fg_diff']
+    if reverb_fn is not None:
+        fg_diff = reverb_fn(fg_diff)
+
+    offset = int(rng.randint(0, target_width - W_fg + 1))
+    canvas[:, offset:offset + W_fg] += fg_diff
+
+    result = canvas * (comp_bg['true_sigma'] + 1e-8) + comp_bg['true_mu']
+    return np.clip(result, 0, None)
+
+
 def normalize_spectrogram(img):
     """
     Apply background subtraction preprocessing to a single spectrogram.

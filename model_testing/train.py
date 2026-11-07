@@ -112,6 +112,12 @@ Examples:
                        help="With --fg-bg-swap: probability of merging a pair of labelled samples by "
                             "elementwise max of their log-spectrograms, labels = union (OR). Teaches "
                             "polyphony (multiple species at once). 0 = disabled (default), try 0.5.")
+    parser.add_argument('--context-embed', action='store_true', dest='context_embed',
+                       help="Embed each training clip's foreground at a random time offset inside a "
+                            "full-width (time_bins) real-background canvas from the --noise-folder "
+                            "data (AviaNZ gaps / freefield), instead of padding short clips with "
+                            "resampled copies of themselves. Makes training windows match continuous "
+                            "field recordings. Train-only; eval/inference unchanged.")
     parser.add_argument('--use-asl', action='store_true', dest='use_asl',
                        help="Use Asymmetric Loss (ASL) instead of BCE — clips easy-negative gradients, "
                             "reducing gradient suppression from all-background samples")

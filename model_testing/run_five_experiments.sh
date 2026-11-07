@@ -105,10 +105,12 @@ NOISE_RATIO="${NOISE_RATIO:-0.2}"
 OUT_REGNET_CHORUS="${OUT_ROOT}/regnet_combined_chorusnoise"
 OUT_REGNET_UNIONMIX="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_unionmix"
 OUT_REGNET_CW="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_classweights"
+OUT_REGNET_CONTEXT="${OUT_ROOT}/regnet_combined_contextembed"
 CHORUS_WAV="${CHORUS_WAV:-${REPO_ROOT}/Sound Files/UK_dawn_chorus.wav}"
 CHORUS_FOLDER="${CHORUS_FOLDER:-${BASE}/noise_dataset/uk_dawn_chorus}"
 CHORUS_NOISE_RATIO="${CHORUS_NOISE_RATIO:-0.2}"
 UNION_MIX_PROB="${UNION_MIX_PROB:-0.5}"
+RUN_CLASSWEIGHTS="${RUN_CLASSWEIGHTS:-false}"  # experiment 14: rejected, opt-in only
 
 PRETRAINED_MODEL="${BIRDCLEF_PRETRAINED_PATH:-BirdClefModels/model_fold0.pth}"
 
@@ -647,6 +649,8 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
 done
 
 # --------------------- 14. RegNet + fg/bg swap + reverb + class-weights (rare-class recall)
+# Rejected as a hack; skipped unless RUN_CLASSWEIGHTS=true is set explicitly.
+if [[ "$RUN_CLASSWEIGHTS" == true ]]; then
 echo ""
 echo ">>> 14 RegNet + fg/bg swap + reverb + class-weights (inverse-freq pos_weight, now applied under kbird)"
 
@@ -683,6 +687,76 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
     --kbird-prior 2.0 \
     --fg-bg-swap \
     --apply-reverb \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
+fi  # RUN_CLASSWEIGHTS
+
+# --------------------- 15. RegNet + context-embed (foreground into wide real background)
+# Root-cause fix for the field-data failure: training clips are ~5s and were padded
+# to the 10.24s input width by resampling their OWN columns, so the call filled the
+# window. Context-embed instead places each clip's foreground at a random offset in
+# a full-width canvas of REAL background (noise dataset: freefield + AviaNZ gaps),
+# so training windows look like continuous field recordings.
+echo ""
+echo ">>> 15 RegNet + context-embed (foreground at random offset in 10s real background)"
+
+# Context-embed needs the noise dataset as its background canvas source; build it
+# if missing (same sources as build_combined_dataset.sh).
+if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
+  echo "--- noise dataset missing; building (freefield + AviaNZ background) ---"
+  SERVER_PREFIX="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic"
+  NOISE_ARGS=()
+  if [[ -d "${SERVER_PREFIX}_02/freefield" ]]; then
+    NOISE_ARGS+=(--freefield-dir "${SERVER_PREFIX}_02/freefield")
+  else
+    echo "  Freefield dir not found: ${SERVER_PREFIX}_02/freefield (skipping environmental noise)"
+  fi
+  for D in "${SERVER_PREFIX}_01" "${SERVER_PREFIX}_02" "${SERVER_PREFIX}_03"; do
+    [[ -d "$D" ]] && NOISE_ARGS+=(--avianz-raw "$D")
+  done
+  PYTHONPATH="$REPO_ROOT" python3 scripts/build_noise_dataset.py \
+    "${NOISE_ARGS[@]}" \
+    --output "${BASE}/noise_dataset" \
+    --num-environmental "$NUM_NOISE_PER_SOURCE" \
+    --num-avianz-background "$NUM_NOISE_PER_SOURCE"
+else
+  echo "--- noise dataset: present, skipping build"
+fi
+
+# Training (no --fg-bg-swap: context-embed supersedes the 4-combo path while keeping
+# fg/bg decomposition; reverb is applied to the foreground before placement)
+training_marker="$OUT_REGNET_CONTEXT/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_CONTEXT" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --apply-reverb \
+    --context-embed \
+    --noise-folder "$NOISE_FOLDER" \
+    --epochs 40 --patience 15 --seed 0
+fi
+
+# Evaluation (context-embed is train-only; eval is standard)
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_CONTEXT/$dataset_key/done"
+
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
+
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_CONTEXT" \
+    --model-type regnet \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
     --seed 0 \
     --eval-only --test-folder "$folder"
   touch "$marker"

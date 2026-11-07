@@ -71,6 +71,7 @@ class AugmentationConfig:
     background_prob: float = 0.0
     fg_bg_swap: bool = False  # Build each batch from batch_size/4 samples x 4 bg/fg combinations (labels follow foreground)
     union_mix_prob: float = 0.0  # With fg_bg_swap: probability of merging a pair of samples by elementwise max, labels = union (OR)
+    context_embed: bool = False  # Embed each clip's foreground at a random offset in a wide real-background canvas (matches field windows)
 
 
 @dataclass
@@ -174,7 +175,8 @@ class TrainerConfig:
                 validation_split=getattr(args, 'validation_split', 0.2),
                 background_prob=getattr(args, 'background_prob', 0.0),
                 fg_bg_swap=getattr(args, 'fg_bg_swap', False),
-                union_mix_prob=getattr(args, 'union_mix_prob', 0.0)
+                union_mix_prob=getattr(args, 'union_mix_prob', 0.0),
+                context_embed=getattr(args, 'context_embed', False)
             ),
             loss=LossConfig(
                 use_class_weights=getattr(args, 'class_weights', False),

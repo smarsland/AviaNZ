@@ -293,6 +293,7 @@ class Trainer:
         self.background_prob = cfg.augmentation.background_prob
         self.fg_bg_swap = getattr(cfg.augmentation, 'fg_bg_swap', False)
         self.union_mix_prob = getattr(cfg.augmentation, 'union_mix_prob', 0.0)
+        self.context_embed = getattr(cfg.augmentation, 'context_embed', False)
         
         # Loss configuration
         self.use_class_weights = cfg.loss.use_class_weights
@@ -477,6 +478,7 @@ class Trainer:
             use_deltas=self.use_deltas,
             fg_bg_reconstruct=self.fg_bg_swap,
             union_mix_prob=self.union_mix_prob,
+            context_embed=self.context_embed,
         )
         
         # Create target domain data loader for DANN
@@ -1408,6 +1410,7 @@ class Trainer:
         model_config['apply_reverb'] = self.apply_reverb
         model_config['fg_bg_swap'] = self.fg_bg_swap
         model_config['union_mix_prob'] = self.union_mix_prob
+        model_config['context_embed'] = self.context_embed
         model_config['kbird_prior'] = self.kbird_prior
         model_config['use_deltas'] = self.use_deltas
         model_config['use_sed_head'] = self.use_sed_head
