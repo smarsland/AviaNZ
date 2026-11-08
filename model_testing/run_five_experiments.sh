@@ -107,6 +107,7 @@ OUT_REGNET_UNIONMIX="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_unionmix"
 OUT_REGNET_CW="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_classweights"
 OUT_REGNET_CONTEXT="${OUT_ROOT}/regnet_combined_contextembed"
 OUT_REGNET_CONTEXT_SED="${OUT_ROOT}/regnet_combined_contextembed_sed"
+OUT_REGNET_CONTEXT_MAXPOOL="${OUT_ROOT}/regnet_combined_contextembed_maxpool"
 CHORUS_WAV="${CHORUS_WAV:-${REPO_ROOT}/Sound Files/UK_dawn_chorus.wav}"
 CHORUS_FOLDER="${CHORUS_FOLDER:-${BASE}/noise_dataset/uk_dawn_chorus}"
 CHORUS_NOISE_RATIO="${CHORUS_NOISE_RATIO:-0.2}"
@@ -808,6 +809,58 @@ else
       --spec-transform Log \
       --kbird-prior 2.0 \
       --sed-head \
+      --seed 0 \
+      --eval-only --test-folder "$folder"
+    touch "$marker"
+  done
+fi
+
+# --------------------- 17. RegNet + context-embed + max-pool head
+# Experiments 15/16 stalled at train accuracy 0.33-0.39: global AVERAGE pooling
+# dilutes a 2.5s call to ~5% of the pooled window, so the classifier can't learn.
+# (16's SED head also had an optimizer bug: sed_head params fell into the backbone
+# param group and trained at 1e-4 instead of 1e-3 - now fixed; delete
+# regnet_combined_contextembed_sed/ to retry it.) Max pooling is the parameter-free
+# version of the same idea: a strong call anywhere in the window fires the class.
+echo ""
+echo ">>> 17 RegNet + context-embed + max-pool head"
+
+if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
+  echo "  ERROR: noise folder missing at $NOISE_FOLDER (experiment 15 block should have built it)"
+else
+  # Training
+  training_marker="$OUT_REGNET_CONTEXT_MAXPOOL/training_history.json"
+  if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+    echo "  Training already done, skipping"
+  else
+    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_CONTEXT_MAXPOOL" \
+      --model-type regnet \
+      --pretrained "$PRETRAINED_MODEL" \
+      --spec-transform Log \
+      --kbird-prior 2.0 \
+      --apply-reverb \
+      --context-embed \
+      --max-pool \
+      --noise-folder "$NOISE_FOLDER" \
+      --epochs 40 --patience 15 --seed 0
+  fi
+
+  # Evaluation (context-embed is train-only; max-pool is saved in the config)
+  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    dataset_key="$(get_dataset_key "$folder")"
+    marker="$OUT_REGNET_CONTEXT_MAXPOOL/$dataset_key/done"
+
+    if [[ "$FORCE" == false && -f "$marker" ]]; then
+      echo "  Skipping $dataset_key (already evaluated)"
+      continue
+    fi
+
+    mkdir -p "$(dirname "$marker")"
+    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_CONTEXT_MAXPOOL" \
+      --model-type regnet \
+      --spec-transform Log \
+      --kbird-prior 2.0 \
+      --max-pool \
       --seed 0 \
       --eval-only --test-folder "$folder"
     touch "$marker"

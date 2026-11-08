@@ -138,6 +138,11 @@ Examples:
                        help="Freeze first N transformer encoder layers (AST only)")
     parser.add_argument('--cnn-adapter', action='store_true',
                        help="Prepend two trainable CNN layers to the backbone (trained at 10x LR)")
+    parser.add_argument('--max-pool', action='store_true', dest='max_pool',
+                       help="Use global MAX pooling instead of average pooling before the "
+                            "classifier: a strong call anywhere in the window fires the class "
+                            "instead of being diluted by averaging over quiet frames. "
+                            "Parameter-free; pairs with --context-embed.")
     parser.add_argument('--sed-head', action='store_true', dest='sed_head',
                        help="Replace global avg pool with per-class temporal attention head (SED-style)")
     parser.add_argument('--gated-head', action='store_true', dest='gated_head',

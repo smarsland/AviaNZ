@@ -596,11 +596,12 @@ class GatedSpeciesHead(nn.Module):
 class RegNetModel(nn.Module):
     """RegNetY model for bird audio classification (BirdClef fine-tuning)."""
 
-    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0, use_cnn_adapter=False, use_sed_head=False, use_gated_head=False, in_chans=1):
+    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0, use_cnn_adapter=False, use_sed_head=False, use_gated_head=False, in_chans=1, use_max_pool=False):
         super().__init__()
         self.num_classes = num_classes
         self.use_sed_head = use_sed_head
         self.use_gated_head = use_gated_head
+        self.use_max_pool = use_max_pool
         self.in_chans = in_chans
 
         self.backbone = timm.create_model(
@@ -632,7 +633,9 @@ class RegNetModel(nn.Module):
         elif use_sed_head:
             self.sed_head = TemporalAttentionHead(backbone_out, num_classes)
         else:
-            self.pooling = nn.AdaptiveAvgPool2d(1)
+            # Max pooling: a strong call anywhere in the window fires the class,
+            # instead of being diluted by global averaging over quiet frames.
+            self.pooling = nn.AdaptiveMaxPool2d(1) if use_max_pool else nn.AdaptiveAvgPool2d(1)
             self.classifier = nn.Linear(backbone_out, num_classes)
 
         self.cnn_adapter = CnnAdapter(in_chans=in_chans) if use_cnn_adapter else None

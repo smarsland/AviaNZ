@@ -41,6 +41,7 @@ class ModelConfig:
     use_cnn_adapter: bool = False
     use_sed_head: bool = False
     use_gated_head: bool = False
+    use_max_pool: bool = False  # Max-pool over time/freq instead of average (small call in wide window)
     ast_channel_dir: Optional[str] = None   # Pre-computed AST attention maps directory
     in_chans: int = 1                       # Input channels (1 = spec only, 2 = spec + AST attn)
 
@@ -149,6 +150,7 @@ class TrainerConfig:
                 use_cnn_adapter=getattr(args, 'cnn_adapter', False),
                 use_sed_head=getattr(args, 'sed_head', False),
                 use_gated_head=getattr(args, 'gated_head', False),
+                use_max_pool=getattr(args, 'max_pool', False),
                 ast_channel_dir=getattr(args, 'ast_channel_dir', None),
                 in_chans=3 if getattr(args, 'use_deltas', False) else (2 if getattr(args, 'ast_channel_dir', None) else 1),
             ),

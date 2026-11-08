@@ -265,6 +265,7 @@ class Trainer:
         self.freeze_stages = cfg.model.freeze_stages
         self.use_cnn_adapter = getattr(cfg.model, 'use_cnn_adapter', False)
         self.use_sed_head = getattr(cfg.model, 'use_sed_head', False)
+        self.use_max_pool = getattr(cfg.model, 'use_max_pool', False)
         self.use_gated_head = getattr(cfg.model, 'use_gated_head', False)
         self.model_name = getattr(cfg.model, 'model_name', 'regnety_008')
         self.ast_channel_dir = getattr(cfg.model, 'ast_channel_dir', None)
@@ -621,6 +622,7 @@ class Trainer:
                 use_sed_head=self.use_sed_head,
                 use_gated_head=self.use_gated_head,
                 in_chans=self.in_chans,
+                use_max_pool=self.use_max_pool,
             ).to(self.device)
         else:
             print("Creating AST model (multilabel)...")
@@ -684,8 +686,9 @@ class Trainer:
         # Use AdamW (Adam with decoupled weight decay) for better regularization
         # Differential LR for RegNet: pretrained backbone gets base LR, randomly-init classifier gets 10x
         if self.model_type == 'regnet':
-            backbone_params = [p for n, p in model.named_parameters() if 'classifier' not in n and 'cnn_adapter' not in n and 'gated_head' not in n and p.requires_grad]
-            classifier_params = [p for n, p in model.named_parameters() if ('classifier' in n or 'gated_head' in n) and p.requires_grad]
+            head_names = ('classifier', 'gated_head', 'sed_head')
+            backbone_params = [p for n, p in model.named_parameters() if not any(h in n for h in head_names) and 'cnn_adapter' not in n and p.requires_grad]
+            classifier_params = [p for n, p in model.named_parameters() if any(h in n for h in head_names) and p.requires_grad]
             adapter_params = [p for n, p in model.named_parameters() if 'cnn_adapter' in n and p.requires_grad]
             param_groups = [
                 {'params': backbone_params, 'lr': self.learning_rate},
@@ -1202,6 +1205,7 @@ class Trainer:
                 use_sed_head=self.use_sed_head,
                 use_gated_head=self.use_gated_head,
                 in_chans=self.in_chans,
+                use_max_pool=self.use_max_pool,
             ).to(self.device)
         else:
             model = AST(self.num_classes, input_size=input_size, dropout=self.dropout,
@@ -1416,6 +1420,7 @@ class Trainer:
         model_config['kbird_prior'] = self.kbird_prior
         model_config['use_deltas'] = self.use_deltas
         model_config['use_sed_head'] = self.use_sed_head
+        model_config['use_max_pool'] = self.use_max_pool
         model_config['in_chans'] = self.in_chans
         
         # Save to JSON

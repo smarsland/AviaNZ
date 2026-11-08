@@ -132,6 +132,7 @@ def loadModel(nn_name, dirnn):
                         use_sed_head=config.get('use_sed_head', False),
                         use_gated_head=config.get('use_gated_head', False),
                         in_chans=config.get('in_chans', 1),
+                        use_max_pool=config.get('use_max_pool', False),
                     )
 
                     missing_keys, unexpected_keys = model.load_state_dict(
