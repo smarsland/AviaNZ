@@ -994,7 +994,9 @@ class Trainer:
                         output, _ = model(data)
                     else:
                         output = model(data)
-                    
+                    if isinstance(output, tuple):
+                        output = output[0]
+
                     # Always multilabel
                     val_loss += criterion(output, target).mean().item()
                     pred = (self._get_probs(output) > 0.5).float()

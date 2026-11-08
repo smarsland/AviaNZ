@@ -47,4 +47,7 @@ def predict_batch(model, features):
         tensor_input = tensor_input.to(device)
         
         predictions = model(tensor_input)
+        if isinstance(predictions, tuple):
+            # SED/gated heads return (clip_logits, aux); clip logits are the prediction
+            predictions = predictions[0]
         return predictions.cpu().numpy()

@@ -106,6 +106,7 @@ OUT_REGNET_CHORUS="${OUT_ROOT}/regnet_combined_chorusnoise"
 OUT_REGNET_UNIONMIX="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_unionmix"
 OUT_REGNET_CW="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_classweights"
 OUT_REGNET_CONTEXT="${OUT_ROOT}/regnet_combined_contextembed"
+OUT_REGNET_CONTEXT_SED="${OUT_ROOT}/regnet_combined_contextembed_sed"
 CHORUS_WAV="${CHORUS_WAV:-${REPO_ROOT}/Sound Files/UK_dawn_chorus.wav}"
 CHORUS_FOLDER="${CHORUS_FOLDER:-${BASE}/noise_dataset/uk_dawn_chorus}"
 CHORUS_NOISE_RATIO="${CHORUS_NOISE_RATIO:-0.2}"
@@ -761,6 +762,57 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
     --eval-only --test-folder "$folder"
   touch "$marker"
 done
+
+# --------------------- 16. RegNet + context-embed + SED head (temporal attention)
+# Experiment 15 showed context-embed alone can't be learned by the global-average-
+# pooling classifier: train accuracy stalled at 0.39 (vs 0.80 for fg/bg swap) because
+# a 2.5s call is ~5% of the pooled window. The SED head (TemporalAttentionHead) lets
+# each class attend to the frames where its evidence lives, which is exactly the
+# "small call inside a wide busy window" regime context-embed produces.
+echo ""
+echo ">>> 16 RegNet + context-embed + SED head (temporal attention pooling)"
+
+if [[ ! -f "$NOISE_FOLDER/labels.json" ]]; then
+  echo "  ERROR: noise folder missing at $NOISE_FOLDER (experiment 15 block should have built it)"
+else
+  # Training
+  training_marker="$OUT_REGNET_CONTEXT_SED/training_history.json"
+  if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+    echo "  Training already done, skipping"
+  else
+    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_CONTEXT_SED" \
+      --model-type regnet \
+      --pretrained "$PRETRAINED_MODEL" \
+      --spec-transform Log \
+      --kbird-prior 2.0 \
+      --apply-reverb \
+      --context-embed \
+      --sed-head \
+      --noise-folder "$NOISE_FOLDER" \
+      --epochs 40 --patience 15 --seed 0
+  fi
+
+  # Evaluation (context-embed is train-only; SED head is saved in the config)
+  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    dataset_key="$(get_dataset_key "$folder")"
+    marker="$OUT_REGNET_CONTEXT_SED/$dataset_key/done"
+
+    if [[ "$FORCE" == false && -f "$marker" ]]; then
+      echo "  Skipping $dataset_key (already evaluated)"
+      continue
+    fi
+
+    mkdir -p "$(dirname "$marker")"
+    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_CONTEXT_SED" \
+      --model-type regnet \
+      --spec-transform Log \
+      --kbird-prior 2.0 \
+      --sed-head \
+      --seed 0 \
+      --eval-only --test-folder "$folder"
+    touch "$marker"
+  done
+fi
 
 echo ""
 echo "All experiments complete!"
