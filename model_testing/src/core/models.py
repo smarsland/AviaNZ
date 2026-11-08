@@ -743,6 +743,14 @@ class RegNetModel(nn.Module):
                 return logits, frame_logits
             return logits
 
+        if self.use_max_pool:
+            # timm's RegNet applies its own global AVG pool inside backbone(x),
+            # so the shared self.pooling path below never sees a 4D map. Bypass
+            # the head entirely to make the max pool real.
+            features = self.backbone.forward_features(x)   # (B, C, F', T')
+            features = self.pooling(features).flatten(1)
+            return self.classifier(features)
+
         features = self.backbone(x)
         if isinstance(features, dict):
             features = features['features']

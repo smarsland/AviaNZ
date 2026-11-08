@@ -264,7 +264,12 @@ def main():
             model_dir, gt_by_file, flat=args.flat,
             only=args.only.split(',') if args.only else None)
 
-        mode = f'flat {args.flat}' if args.flat is not None else 'tuned thresholds'
+        if args.flat is not None:
+            mode = f'flat {args.flat}'
+        elif fm.thresholds is not None:
+            mode = 'tuned thresholds'
+        else:
+            mode = 'FLAT 0.5 - thresholds_combined.csv MISSING, run compute_combined_thresholds.py first!'
         print(f'\n{"=" * 60}\n{fm.model_dir.name}  ({mode}, {n_windows} windows)\n{"=" * 60}')
         print(f'{"GT species":45s} {"n":>4s} {"recall":>8s} {"top1":>6s}')
         for key in sorted(stats, key=lambda k: -stats[k]['pos']):
