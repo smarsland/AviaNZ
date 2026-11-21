@@ -53,4 +53,4 @@ Docs/FilterTraining.soc
 
 tests*
 model_testing/model_tests/
-model_testing/results_figure*
+model_testing/combined_dataset/
