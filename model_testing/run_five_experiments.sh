@@ -108,6 +108,8 @@ OUT_REGNET_CW="${OUT_ROOT}/regnet_combined_fgbgswap_reverb_classweights"
 OUT_REGNET_CONTEXT="${OUT_ROOT}/regnet_combined_contextembed"
 OUT_REGNET_CONTEXT_SED="${OUT_ROOT}/regnet_combined_contextembed_sed"
 OUT_REGNET_CONTEXT_MAXPOOL="${OUT_ROOT}/regnet_combined_contextembed_maxpool"
+OUT_AST="${OUT_ROOT}/ast_combined"
+OUT_AST_FGBG="${OUT_ROOT}/ast_combined_fgbgswap"
 CHORUS_WAV="${CHORUS_WAV:-${REPO_ROOT}/Sound Files/UK_dawn_chorus.wav}"
 CHORUS_FOLDER="${CHORUS_FOLDER:-${BASE}/noise_dataset/uk_dawn_chorus}"
 CHORUS_NOISE_RATIO="${CHORUS_NOISE_RATIO:-0.2}"
@@ -866,6 +868,80 @@ else
     touch "$marker"
   done
 fi
+
+# -------------------------------------------------------- 18. AST baseline
+echo ""
+echo ">>> 18 AST, combined DOC + AviaNZ"
+
+# Training
+training_marker="$OUT_AST/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_AST" \
+    --model-type ast \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --epochs 40 --patience 15 --seed 0
+fi
+
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_AST/$dataset_key/done"
+
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
+
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_AST" \
+    --model-type ast \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
+
+# -------------------------------------------------- 19. AST + fg/bg swap
+echo ""
+echo ">>> 19 AST + fg/bg swap, combined DOC + AviaNZ"
+
+# Training
+training_marker="$OUT_AST_FGBG/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DATASET" "$OUT_AST_FGBG" \
+    --model-type ast \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --epochs 40 --patience 15 --seed 0
+fi
+
+# Evaluation (eval-time input is a deterministic self bg+fg reconstruction)
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_AST_FGBG/$dataset_key/done"
+
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
+
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DATASET" "$OUT_AST_FGBG" \
+    --model-type ast \
+    --spec-transform Log \
+    --kbird-prior 2.0 \
+    --fg-bg-swap \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
 
 echo ""
 echo "All experiments complete!"
